@@ -71,7 +71,22 @@ npm test
 | `builder.snapshot()` | 取得可保存、可继续编辑的 `InkScene` 数据 |
 | `renderCanvas(ctx, snapshot, { time?, paperTexture?, clear? })` | 将场景绘制到 Canvas 2D，返回绘制统计 |
 
-`start`、`duration` 与渲染选项 `time` 使用绝对秒数。省略 `time` 时显示全部完成的笔触；同一时间点可重新渲染。固定数据、种子及时间面向可重复结果设计，但不承诺不同浏览器间的像素完全一致。
+`start`、`duration` 与渲染选项 `time` 使用绝对秒数。省略 `time` 时显示全部完成的笔触；同一时间点可重新渲染。固定数据、种子及时间面向可重复结果设计，但不承诺不同浏览器间的像素完全一致。默认 `clear: true` 会重绘整个画面；`clear: false` 用于在已有画面上叠加，会受之前绘制结果影响。
+
+Builder 返回的笔触和快照会被冻结，避免外部修改影响正在使用的版本。调整已生成笔触时，可通过对象展开与 `map` 创建新场景，再交给渲染器：
+
+```ts
+const original = builder.snapshot();
+const revised = {
+  ...original,
+  marks: original.marks.map(mark => mark.kind === 'stroke'
+    ? { ...mark, width: mark.width * 1.2 }
+    : mark)
+};
+renderCanvas(ctx, revised);
+```
+
+也可保存为 JSON。在 JavaScript 中，`structuredClone(original)` 可取得独立的可写副本；TypeScript 会保留原有的 `readonly` 类型，建议采用上面的重建方式。
 
 皴擦的 `flow(point)` 只在生成笔触时使用，不进入序列化数据。更多参数与使用边界见 [技法说明](docs/techniques.md) 和 [类型定义](src/types.ts)。
 

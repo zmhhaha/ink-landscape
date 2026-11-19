@@ -1,0 +1,26 @@
+{
+  "name": "ink-landscape",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Composable, source-first ink painting techniques for Canvas 2D and creative agents.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zmhhaha/ink-landscape.git"
+  },
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "files": ["dist", "src", "docs/techniques.md", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test",
+    "dev": "npm run build && node scripts/serve.mjs",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": { "typescript": "~5.9.3" }
+}

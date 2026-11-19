@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ink Landscape · 笔墨试验台</title>
+    <link rel="stylesheet" href="/examples/style.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="/">Ink Landscape <span>笔墨试验台</span></a>
+      <a class="quiet-link" href="/examples/verify.html">运行检查</a>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">CANVAS 2D · COMPOSABLE INK STUDIES</p>
+        <h1>从一笔开始，组合山水。</h1>
+        <p>查看可编辑的笔触、铺染和皴擦近似。每幅画来自源码与固定种子，沿绝对时间定位。</p>
+      </section>
+      <nav class="studies" aria-label="选择技法示例">
+        <button type="button" class="study active" data-study="brush" aria-pressed="true"><span>01</span>笔触试纸</button>
+        <button type="button" class="study" data-study="cun" aria-pressed="false"><span>02</span>皴擦研究</button>
+        <button type="button" class="study" data-study="wash" aria-pressed="false"><span>03</span>铺染留白</button>
+        <button type="button" class="study" data-study="landscape" aria-pressed="false"><span>04</span>山水组合</button>
+      </nav>
+      <section class="workspace" aria-label="示例与参数">
+        <div class="painting-area">
+          <div class="painting-heading"><h2 id="study-title">笔触试纸</h2><span>1280 × 800</span></div>
+          <canvas id="painting" width="1280" height="800" aria-label="程序化笔墨示例画面"></canvas>
+          <p class="caption" id="study-caption"></p>
+        </div>
+        <aside class="controls" aria-label="绘图参数">
+          <h2>调整这一幅</h2>
+          <label for="seed">随机种子</label>
+          <input id="seed" type="number" min="0" max="4294967295" step="1" value="261119" required>
+          <p class="help">同种子、同参数保留同一组笔触。</p>
+          <label for="dryness">枯润 <output id="dryness-value" for="dryness">0.55</output></label>
+          <input id="dryness" type="range" min="0" max="1" step="0.01" value="0.55">
+          <div class="range-labels"><span>润</span><span>枯</span></div>
+          <label for="time">绝对时间 <output id="time-value" for="time">6.0 s</output></label>
+          <input id="time" type="range" min="0" max="6" step="0.1" value="6">
+          <p class="help">直接定位笔触进度；这些小样不是正式动画成片。</p>
+          <button id="redraw" class="primary" type="button">重新绘制</button>
+          <div class="export-buttons"><button id="export-png" type="button">导出 PNG</button><button id="export-json" type="button">导出 JSON</button></div>
+          <button id="repeat-check" class="secondary" type="button">检查重复定位</button>
+          <p id="check-status" class="status" role="status" aria-live="polite"></p>
+          <dl class="render-stats"><div><dt>当前可见笔触</dt><dd id="stroke-count">—</dd></div><div><dt>当前可见铺染</dt><dd id="wash-count">—</dd></div><div><dt>本次绘制</dt><dd id="render-time">—</dd></div></dl>
+        </aside>
+      </section>
+      <p class="scope-note"><strong>程序化近似，尚待艺术验收。</strong> 技法名称说明研究方向；样例展示函数如何组合，不代表已复现传统笔法。当前使用 Canvas 2D，未启用 Shader。</p>
+      <p id="error" class="error" role="alert"></p>
+    </main>
+    <footer>自由设计路径、区域与笔势，保留每一次用笔的数据。</footer>
+    <script type="module" src="/examples/app.mjs"></script>
+  </body>
+</html>
