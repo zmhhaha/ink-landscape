@@ -2,6 +2,7 @@ import type {
   CunOptions, InkMark, InkPoint, InkScene, SceneBuilder, SceneOptions,
   StrokeMark, StrokeOptions, Vec2, WashMark, WashOptions,
 } from './types.js';
+import { copyStrokeBrush } from './brush-state.js';
 
 const TAU = Math.PI * 2;
 const EPSILON = 1e-9;
@@ -181,13 +182,18 @@ function timing(options: { readonly start?: number; readonly duration?: number }
 function strokeMark(id: string, points: readonly InkPoint[], options: StrokeOptions, fallbackSeed: number): StrokeMark {
   const nib = options.nib ?? 'round';
   if (nib !== 'round' && nib !== 'flat') throw new RangeError('nib must be round or flat');
+  if (options.smoothing !== undefined && options.smoothing !== 'linear' && options.smoothing !== 'catmull-rom') {
+    throw new RangeError('smoothing must be linear or catmull-rom');
+  }
   const mark: StrokeMark = {
     kind: 'stroke', id: text(id, 'id'), points: copyPath(points),
     width: positive(options.width ?? 8, 'width'), ink: text(options.ink ?? '#20251f', 'ink'),
     opacity: bounded(options.opacity ?? 0.85, 'opacity'), dryness: bounded(options.dryness ?? 0.25, 'dryness'),
     nib, tipAngle: finite(options.tipAngle ?? 0, 'tipAngle'),
+    ...(options.smoothing === undefined ? {} : { smoothing: options.smoothing }),
     seed: seedValue(options.seed ?? fallbackSeed), ...timing(options),
     ...(options.clip === undefined ? {} : { clip: copyPolygon(options.clip, 'clip') }),
+    ...(options.brush === undefined ? {} : { brush: copyStrokeBrush(options.brush) }),
   };
   return Object.freeze(mark);
 }

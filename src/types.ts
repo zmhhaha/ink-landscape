@@ -1,6 +1,42 @@
 export interface Vec2 { readonly x: number; readonly y: number }
 export interface InkPoint extends Vec2 { readonly pressure?: number }
 
+/** Controls are placed by normalized arc length on the generated stroke. */
+export interface BrushControl {
+  readonly at: number;
+  /** Multiplies authored pressure; zero-pressure gaps remain gaps. */
+  readonly pressure?: number;
+  /** 0 keeps the tip central; 1 places contact to its side. */
+  readonly side?: number;
+  /** Spread direction relative to the local tangent, in radians. */
+  readonly angle?: number;
+  readonly dryness?: number;
+  /** Available contact coverage, not a physical water/pigment reservoir. */
+  readonly inkLoad?: number;
+}
+
+export interface StrokeBrush {
+  readonly version: 1;
+  readonly controls: readonly BrushControl[];
+}
+
+export type StrokeSmoothing = 'linear' | 'catmull-rom';
+
+export interface PathSamplingOptions {
+  /** Desired arc-length spacing; output is capped at 8193 samples. Default 2. */
+  readonly spacing?: number;
+  /** Omitted preserves caller-supplied straight segments and corners. */
+  readonly smoothing?: StrokeSmoothing;
+}
+
+export interface StrokePathSample extends Vec2 {
+  readonly pressure: number;
+  readonly distance: number;
+  /** Unit normal from the path tangent; an exact reversal has a cusp. */
+  readonly nx: number;
+  readonly ny: number;
+}
+
 export interface TimingOptions {
   /** Absolute start time in seconds; default 0. */
   readonly start?: number;
@@ -9,6 +45,8 @@ export interface TimingOptions {
 }
 
 export interface StrokeOptions extends TimingOptions {
+  /** Optional versioned, local contact controls; legacy strokes omit this. */
+  readonly brush?: StrokeBrush;
   readonly id?: string;
   readonly width?: number;
   readonly ink?: string;
@@ -16,6 +54,8 @@ export interface StrokeOptions extends TimingOptions {
   /** 0 = wet/solid, 1 = broken dry brush. */
   readonly dryness?: number;
   readonly nib?: 'round' | 'flat';
+  /** Optional centripetal Catmull–Rom interpolation; default is linear. */
+  readonly smoothing?: StrokeSmoothing;
   /** Nib angle in radians. */
   readonly tipAngle?: number;
   readonly seed?: number;
@@ -51,11 +91,13 @@ interface MarkBase {
 }
 
 export interface StrokeMark extends MarkBase {
+  readonly brush?: StrokeBrush;
   readonly kind: 'stroke';
   readonly points: readonly InkPoint[];
   readonly width: number;
   readonly dryness: number;
   readonly nib: 'round' | 'flat';
+  readonly smoothing?: StrokeSmoothing;
   readonly tipAngle: number;
   readonly clip?: readonly Vec2[];
 }

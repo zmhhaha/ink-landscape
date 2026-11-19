@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ink Landscape · 剑峰与云海</title>
+    <link rel="stylesheet" href="/examples/style.css">
+    <link rel="stylesheet" href="/examples/landscape-study.css">
+  </head>
+  <body>
+    <header class="site-header"><a class="wordmark" href="/">Ink Landscape <span>笔墨试验台</span></a><nav class="header-links"><a class="quiet-link" href="/examples/rock-study.html">此前42笔对照</a><a class="quiet-link" href="/examples/brush-study.html">基础笔法</a></nav></header>
+    <main class="landscape-study">
+      <section class="intro"><p class="eyebrow">SWORD PEAKS · DRY INK · CANVAS 2D</p><h1>峰从墨起，云从白生。</h1><p>锐脊造形、长劈干擦与云海切割。生成一次笔墨缓存，再按绝对时间合成画面。</p></section>
+      <form id="landscape-controls" class="rock-toolbar">
+        <label>随机种子 <input id="landscape-seed" type="number" min="0" max="4294967295" step="1" value="261119" required></label>
+        <button type="submit">重新生成</button>
+        <label>显露时间 <input id="landscape-time" type="range" min="0" max="6" step="0.1" value="6"><output id="landscape-time-value">6.0 s</output></label>
+        <button id="landscape-export-png" type="button">导出 PNG</button><button id="landscape-export-json" type="button">导出笔路 JSON</button>
+        <button id="landscape-import-json" type="button">载入 JSON</button><input id="landscape-file" type="file" accept=".json,application/json" hidden>
+      </form>
+      <figure class="landscape-hero"><canvas id="landscape-canvas" width="1280" height="800" aria-label="剑峰云海完整画面"></canvas><figcaption>开放峰脊保留折角；焦墨沿岩面落势积叠，山根由透明云海遮罩切开。</figcaption></figure>
+      <dl class="landscape-metrics" aria-label="当前缓存与渲染"><div><dt>峰体笔触</dt><dd id="landscape-strokes">—</dd></div><div><dt>缓存构建</dt><dd id="landscape-builds">—</dd></div><div><dt>缓存像素估算</dt><dd id="landscape-bytes">—</dd></div><div><dt>初次构建</dt><dd id="landscape-initialization">—</dd></div><div><dt>本次合成</dt><dd id="landscape-elapsed">—</dd></div></dl>
+      <p class="help">耗时为本机同步合成调用，不含显示提交。缓存数值为保留画布的 RGBA 像素估算，不是浏览器内存峰值。</p>
+      <section class="landscape-check"><h2>检查缓存与山根</h2><p>按当前种子检查默认配方的乱序定位、数据重放、透明山根与缓存合成。载入的自定义构图需另外看图确认。</p><button id="landscape-check" type="button">运行工程检查</button><pre id="landscape-check-result" class="verification" data-status="idle">尚未运行</pre></section>
+      <details id="landscape-layers"><summary>查看山体与云海遮罩</summary><p>透明区以棋盘格显示。两幅山体图使用同一几何与材质，第三幅展示实际擦除遮罩。</p><div id="landscape-layer-grid" class="landscape-layer-grid"></div></details>
+      <section class="landscape-history"><h2>从42笔试验到完整山水</h2><p>左侧保留此前三石小景，右侧为本次重写。构图与目标已改变，此处用于观察整体方向，不作为只改变单个变量的实验。</p><div class="landscape-comparison"><figure><canvas id="landscape-before" width="1200" height="760" aria-label="此前42笔岩石组合"></canvas><figcaption>此前：闭合石形与分散短皴</figcaption></figure><figure><canvas id="landscape-after" width="1280" height="800" aria-label="本次重写的完整山水"></canvas><figcaption>本次：锐脊、长劈与山根留白</figcaption></figure></div></section>
+      <p class="scope-note">原创 Canvas 2D 场景研究。时间控制用于缓存层显露，尚不代表自然落笔与连续动画验收；参考相似度和笔墨质感以实际看图为准。</p>
+      <p id="landscape-error" class="error" role="alert"></p>
+      <script id="landscape-record" type="application/json"></script>
+      <script id="landscape-evidence" type="application/json"></script>
+    </main>
+    <footer>沿着山势用笔，让浓墨、断白和云根共同造形。</footer>
+    <script type="module" src="/examples/landscape-study.mjs"></script>
+  </body>
+</html>

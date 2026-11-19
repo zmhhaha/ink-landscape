@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ink Landscape · 第13–30批研究对照</title>
+  <link rel="stylesheet" href="/examples/revision-review.css">
+  <link rel="stylesheet" href="/examples/remaining-review.css">
+</head>
+<body>
+  <header><a href="/">Ink Landscape</a> · <a href="/examples/revision-review.html">前十二批</a>
+    <h1>第13–30批研究对照</h1>
+    <p>每批三项，三列同题对照与两倍局部。各项资料范围见图下说明，艺术效果待统一评价。</p></header>
+  <nav aria-label="新增批次控制">
+    <label>批次 <select id="remaining-batch"></select></label>
+    <label>换形 <select id="remaining-layout"></select></label>
+    <button id="remaining-png" type="button">保存本批图片</button>
+    <button id="remaining-json" type="button">保存本批源数据</button>
+  </nav>
+  <p id="remaining-status" role="status" aria-live="polite">准备样片</p>
+  <main id="remaining-studies"></main>
+  <details id="remaining-editor"><summary>编辑选中样片的源</summary>
+    <p id="remaining-selection">点击样片下的“编辑此源”，修改笔路、局部控制或事件后重新生成。</p>
+    <textarea id="remaining-source" aria-label="样片源JSON" spellcheck="false"></textarea>
+    <button id="remaining-apply" type="button">从编辑源重新生成</button>
+    <button id="remaining-local-edit" type="button">局部试改：移一笔并加宽</button>
+    <p id="remaining-edit-status" role="status"></p>
+  </details>
+  <details><summary>工程检查</summary>
+    <p>检查源重建、局部编辑、作者结构和绝对时间重放。测试结果不代替艺术评价。</p>
+    <button id="remaining-check-current" type="button">检查本批</button>
+    <button id="remaining-check" type="button">检查新增十八批</button>
+    <pre id="remaining-checks" data-status="idle"></pre>
+  </details>
+  <pre id="remaining-record" hidden></pre>
+  <script type="module" src="/examples/remaining-review.mjs"></script>
+</body></html>

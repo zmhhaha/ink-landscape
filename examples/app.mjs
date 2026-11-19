@@ -5,6 +5,7 @@ const canvas = document.querySelector('#painting');
 const context = canvas.getContext('2d', { willReadFrequently: true });
 const seedInput = document.querySelector('#seed');
 const drynessInput = document.querySelector('#dryness');
+const smoothingInput = document.querySelector('#smoothing');
 const timeInput = document.querySelector('#time');
 const error = document.querySelector('#error');
 const checkStatus = document.querySelector('#check-status');
@@ -15,9 +16,10 @@ let pendingFrame = 0;
 function render() {
   const started = performance.now();
   const stats = renderCanvas(context, scene, { time: Number(timeInput.value) });
+  const elapsed = performance.now() - started;
   document.querySelector('#stroke-count').textContent = String(stats.strokeCount);
   document.querySelector('#wash-count').textContent = String(stats.washCount);
-  document.querySelector('#render-time').textContent = `${(performance.now() - started).toFixed(1)} ms`;
+  document.querySelector('#render-time').textContent = `${elapsed.toFixed(1)} ms`;
   document.querySelector('#time-value').textContent = `${Number(timeInput.value).toFixed(1)} s`;
 }
 
@@ -26,7 +28,7 @@ function rebuild() {
   checkStatus.textContent = '';
   try {
     if (!seedInput.checkValidity()) throw new RangeError('请输入 0 至 4294967295 的整数种子。');
-    scene = makeStudy(activeStudy, { seed: Number(seedInput.value), dryness: Number(drynessInput.value) });
+    scene = makeStudy(activeStudy, { seed: Number(seedInput.value), dryness: Number(drynessInput.value), smoothing: smoothingInput.value });
     document.querySelector('#dryness-value').textContent = Number(drynessInput.value).toFixed(2);
     document.querySelector('#study-title').textContent = studies[activeStudy].title;
     document.querySelector('#study-caption').textContent = studies[activeStudy].caption;
@@ -52,6 +54,7 @@ document.querySelectorAll('[data-study]').forEach(button => button.addEventListe
 }));
 document.querySelector('#redraw').addEventListener('click', rebuild);
 seedInput.addEventListener('change', rebuild);
+smoothingInput.addEventListener('change', rebuild);
 drynessInput.addEventListener('input', () => schedule(rebuild));
 timeInput.addEventListener('input', () => schedule(() => {
   try { render(); } catch (caught) { error.textContent = caught.message; }

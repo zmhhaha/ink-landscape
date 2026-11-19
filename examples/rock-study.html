@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ink Landscape · 岩石分面对照</title>
+    <link rel="stylesheet" href="/examples/style.css">
+  </head>
+  <body>
+    <header class="site-header"><a class="wordmark" href="/">Ink Landscape <span>笔墨试验台</span></a><nav class="header-links"><a class="quiet-link" href="/examples/brush-study.html">笔法对照</a><a class="quiet-link" href="/examples/verify.html">运行检查</a></nav></header>
+    <main class="brush-study rock-study">
+      <section class="intro"><p class="eyebrow">ROCK PLANES · CANVAS 2D</p><h1>岩有向背，笔有疏密。</h1><p>相同轮廓、底墨、骨线与一组笔触，比较均匀分布和按岩面组织，再换一块斜卧石。</p></section>
+      <form id="rock-controls" class="rock-toolbar">
+        <label>随机种子 <input id="rock-seed" type="number" min="0" max="4294967295" step="1" value="261119" required></label>
+        <button type="submit">重新绘制</button>
+        <label class="plane-toggle"><input id="rock-faces" type="checkbox">显示分面</label>
+        <button id="rock-export-png" type="button">导出对照 PNG</button><button id="rock-export-json" type="button">导出笔触 JSON</button>
+      </form>
+      <p class="rock-conditions">每石 42 笔皴擦＋6 条骨线 · 600 × 420 · 固定完成时间 6s · <a href="/examples/landscape-study.html">查看剑峰与云海重写</a></p>
+      <p id="rock-face-key" class="rock-face-key" hidden>分面仅用于观察：<span>亮面</span><span>侧面</span><span>暗面</span></p>
+      <section id="rock-comparisons" class="comparison-grid" aria-label="两种岩石的固定笔数对照"></section>
+      <section class="rock-composition"><h2>放回一幅小景</h2><p>相同布局和墨色层次，将同一分面规则用于大小不同的岩体。</p><div id="rock-landscapes" class="comparison-grid" aria-label="完整组合对照"></div></section>
+      <p class="scope-note">分面用于组织用笔，骨线保留曲直变化。疏密和墨量的数值检查不能代替看图；这些原创样片尚未通过传统皴法艺术验收。</p>
+      <p id="rock-error" class="error" role="alert"></p>
+      <script id="rock-record" type="application/json"></script><script id="rock-sheet-data" type="application/json"></script>
+    </main>
+    <footer>固定一组笔，比较组织方式，让留白参与造形。</footer>
+    <script type="module" src="/examples/rock-study.mjs"></script>
+  </body>
+</html>

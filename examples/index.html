@@ -9,9 +9,11 @@
   <body>
     <header class="site-header">
       <a class="wordmark" href="/">Ink Landscape <span>笔墨试验台</span></a>
-      <a class="quiet-link" href="/examples/verify.html">运行检查</a>
+      <nav class="header-links"><a class="quiet-link" href="/examples/foundation-study.html">基础笔法第一批</a><a class="quiet-link" href="/examples/gesture-study.html">起收转折第二批</a><a class="quiet-link" href="/examples/dot-study.html">点迹第三批</a><a class="quiet-link" href="/examples/ink-study.html">墨法第四批</a><a class="quiet-link" href="/examples/water-study.html">水法第五批</a><a class="quiet-link" href="/examples/cun-study.html">皴法第六批</a><a class="quiet-link" href="/examples/line-cun-study.html">线皴第七批</a><a class="quiet-link" href="/examples/branch-cun-study.html">环抱点皴第八批</a><a class="quiet-link" href="/examples/vegetation-study.html">点苔点叶第九批</a><a class="quiet-link" href="/examples/leaf-cluster-study.html">分向叶簇第十批</a><a class="quiet-link" href="/examples/pepper-broken-pine-study.html">点簇针束第十一批</a><a class="quiet-link" href="/examples/bamboo-plum-outline-study.html">竹叶围攒双勾第十二批</a><a class="quiet-link" href="/examples/technique-atlas.html">笔法学习册</a><a class="quiet-link" href="/examples/brush-study.html">笔法对照</a><a class="quiet-link" href="/examples/rock-study.html">岩石分面</a><a class="quiet-link" href="/examples/verify.html">运行检查</a></nav>
     </header>
     <main>
+      <p><a class="quiet-link" href="/examples/revision-review.html">查看前十二批回修对照：毛边、分束、水墨与枝叶组织</a></p>
+      <p><a class="quiet-link" href="/examples/remaining-review.html">查看第13–30批：运笔、墨水、皴法、衣纹与书法研究</a></p>
       <section class="intro">
         <p class="eyebrow">CANVAS 2D · COMPOSABLE INK STUDIES</p>
         <h1>从一笔开始，组合山水。</h1>
@@ -21,7 +23,7 @@
         <button type="button" class="study active" data-study="brush" aria-pressed="true"><span>01</span>笔触试纸</button>
         <button type="button" class="study" data-study="cun" aria-pressed="false"><span>02</span>皴擦研究</button>
         <button type="button" class="study" data-study="wash" aria-pressed="false"><span>03</span>铺染留白</button>
-        <button type="button" class="study" data-study="landscape" aria-pressed="false"><span>04</span>山水组合</button>
+        <a class="study study-link" href="/examples/landscape-study.html"><span>04</span>剑峰云海</a>
       </nav>
       <section class="workspace" aria-label="示例与参数">
         <div class="painting-area">
@@ -34,6 +36,9 @@
           <label for="seed">随机种子</label>
           <input id="seed" type="number" min="0" max="4294967295" step="1" value="261119" required>
           <p class="help">同种子、同参数保留同一组笔触。</p>
+          <label for="smoothing">笔路</label>
+          <select id="smoothing"><option value="catmull-rom">平滑笔路</option><option value="linear">原始折线</option></select>
+          <p class="help">平滑连接输入点；刻意折笔可选择原始折线。</p>
           <label for="dryness">枯润 <output id="dryness-value" for="dryness">0.55</output></label>
           <input id="dryness" type="range" min="0" max="1" step="0.01" value="0.55">
           <div class="range-labels"><span>润</span><span>枯</span></div>

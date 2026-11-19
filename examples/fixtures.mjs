@@ -94,12 +94,15 @@ function landscapeStudy(scene, dryness, seed) {
   }
 }
 
-export function makeStudy(kind, { seed = 261119, dryness = .55 } = {}) {
+export function makeStudy(kind, { seed = 261119, dryness = .55, smoothing = 'catmull-rom' } = {}) {
   if (!(kind in studies)) throw new RangeError('Unknown study');
+  if (smoothing !== 'linear' && smoothing !== 'catmull-rom') throw new RangeError('Unknown smoothing');
   const scene = createInkScene({ width: 1280, height: 800, seed, background: '#f2efe5' });
   if (kind === 'brush') brushStudy(scene, dryness);
   if (kind === 'cun') cunStudy(scene, dryness);
   if (kind === 'wash') washStudy(scene, dryness);
   if (kind === 'landscape') landscapeStudy(scene, dryness, seed);
-  return scene.snapshot();
+  const snapshot = scene.snapshot();
+  return Object.freeze({ ...snapshot, marks: Object.freeze(snapshot.marks.map(mark => mark.kind === 'stroke'
+    ? Object.freeze({ ...mark, smoothing }) : mark)) });
 }

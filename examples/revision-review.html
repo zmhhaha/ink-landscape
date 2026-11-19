@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ink Landscape · 十二批回修对照</title>
+  <link rel="stylesheet" href="/examples/revision-review.css">
+</head>
+<body>
+  <header><a href="/">Ink Landscape</a><h1>十二批回修对照</h1>
+    <p>第二轮：水线沉积、皴笔浓淡、生长方向与收笔飞丝。每批三项，保留三列对照及两倍局部。</p></header>
+  <nav aria-label="回修样片控制">
+    <label>批次 <select id="revision-batch"></select></label>
+    <label>换形 <select id="revision-layout"></select></label>
+    <button id="revision-png" type="button">保存本批图片</button>
+    <button id="revision-json" type="button">保存本批源数据</button>
+    <a id="revision-edit" href="/examples/foundation-study.html">逐笔编辑本批</a>
+  </nav>
+  <p id="revision-status" role="status" aria-live="polite">准备样片</p>
+  <main id="revision-studies"></main>
+  <details><summary>工程检查</summary>
+    <p>检查源重建、时间重放及像素行为；艺术效果由查看者评价。</p>
+    <button id="revision-check-current" type="button">检查本批</button>
+    <button id="revision-check" type="button">检查全部十二批</button>
+    <pre id="revision-checks" data-status="idle"></pre>
+  </details>
+  <pre id="revision-record" hidden></pre>
+  <script type="module" src="/examples/revision-review.mjs"></script>
+</body>
+</html>

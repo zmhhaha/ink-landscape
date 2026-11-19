@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ink Landscape · 笔法学习册</title>
+    <link rel="stylesheet" href="/examples/style.css"><link rel="stylesheet" href="/examples/technique-atlas.css">
+  </head>
+  <body>
+    <header class="site-header"><a class="wordmark" href="/">Ink Landscape <span>笔墨试验台</span></a><nav class="header-links"><a class="quiet-link" href="/examples/vegetation-study.html">点苔点叶第九批</a><a class="quiet-link" href="/examples/leaf-cluster-study.html">分向叶簇第十批</a><a class="quiet-link" href="/examples/brush-study.html">此前笔法对照</a><a class="quiet-link" href="/examples/landscape-study.html">整景实验</a></nav></header>
+    <main class="technique-atlas">
+      <section class="intro"><p class="eyebrow">BRUSHWORK · SOURCES · STUDIES</p><h1>先识笔，再成画。</h1><p>从文献里的动作，走到可观察的笔迹。一项项比较起收、提按、转折与点迹，再研究墨、水、皴法和组合。</p></section>
+      <dl class="atlas-counts"><div><dt>术语目录</dt><dd id="atlas-total">—</dd></div><div><dt>逐项阅读笔记</dt><dd id="atlas-reading-count">—</dd></div><div><dt>含程序近似</dt><dd id="atlas-prototypes">—</dd></div><div><dt>已读来源</dt><dd id="atlas-source-count">—</dd></div></dl>
+      <p id="atlas-reading-status" class="atlas-reading-status"></p>
+      <section class="atlas-study" aria-label="第一批基础笔法">
+        <div class="atlas-section-title"><h2>第一批 · 基础用笔与点迹</h2><p>同题比较，再换一条路径观察。</p></div>
+        <form id="atlas-controls" class="atlas-controls"><label>练习笔路 <select id="atlas-path"><option value="original">横向折弯</option><option value="transfer">换形：斜向急转</option></select></label><label>种子 <input id="atlas-seed" type="number" min="0" max="4294967295" step="1" value="261119" required></label><label class="atlas-toggle"><input id="atlas-overlay" type="checkbox">显示笔路</label><button type="submit">重新绘制</button><button id="atlas-export-png" type="button">导出样片册</button><button id="atlas-export-json" type="button">导出笔路 JSON</button></form>
+        <div class="atlas-lab"><nav id="atlas-study-list" aria-label="选择基础笔法"></nav><div class="atlas-active"><h3 id="atlas-study-title"></h3><p id="atlas-variable"></p><div id="atlas-canvases" class="atlas-canvases"></div><p id="atlas-observation"></p><p id="atlas-study-sources" class="atlas-sources-inline"></p></div></div>
+        <details class="atlas-check"><summary>检查样片复现</summary><p>检查原题与换形样片的像素重放、JSON 重建和成对差异。通过检查只表示工程行为正确。</p><button id="atlas-check" type="button">运行样片检查</button><pre id="atlas-check-result" class="verification" data-status="idle">尚未运行</pre></details>
+      </section>
+      <section class="atlas-catalog" id="reading-catalog"><div class="atlas-section-title"><h2>100 条逐项学习</h2><p>展开每项阅读笔记，查看动作、笔迹、适用范围、误区与出处。未确证的词义保留问题。</p></div>
+        <div class="atlas-filters"><label>查找术语 <input id="atlas-query" type="search" placeholder="例如：折带、铁线、破墨"></label><label>分类 <select id="atlas-category"><option value="">全部分类</option></select></label><label>进度 <select id="atlas-progress"><option value="">全部进度</option><option value="prototype">含程序近似</option><option value="pending">待实现</option></select></label><output id="atlas-filter-count" aria-live="polite"></output></div>
+        <div class="atlas-table-wrap"><table><thead><tr><th scope="col">术语／层级</th><th scope="col">观察目标</th><th scope="col">资料</th><th scope="col">程序与对照</th></tr></thead><tbody id="atlas-catalog-rows"></tbody></table></div>
+      </section>
+      <section class="atlas-source-section"><div class="atlas-section-title"><h2>来源与阅读范围</h2><p>博物馆说明、古书转录与现代教学分开注明；未读到的内容保留待查状态。</p></div><ol id="atlas-sources"></ol></section>
+      <p id="atlas-error" class="error" role="alert"></p>
+      <script id="atlas-record" type="application/json"></script><script id="atlas-evidence" type="application/json"></script>
+    </main><footer>查出处，析动作，留笔路，做对照，再用到画中。</footer>
+    <script type="module" src="/examples/technique-atlas.mjs"></script>
+  </body>
+</html>

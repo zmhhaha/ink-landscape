@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ink Landscape · 浏览器检查</title><link rel="stylesheet" href="/examples/style.css"></head>
   <body>
     <header class="site-header"><a class="wordmark" href="/">Ink Landscape</a><a class="quiet-link" href="/">返回试验台</a></header>
-    <main><p class="eyebrow">ACTUAL CANVAS CHECK</p><h1>实际绘制与重复定位</h1><p>检查四类示例的真实像素、时间变化、种子变化和调用次序独立性。通过表示工程行为成立，不表示艺术质量已经验收。</p><pre id="verification" class="verification" data-status="running">检查中…</pre><canvas id="verification-canvas" class="verification-canvas" width="1280" height="800" aria-label="最后一个检查样例"></canvas></main>
+    <main><p class="eyebrow">ACTUAL CANVAS CHECK</p><h1>实际绘制与重复定位</h1><p>检查示例与局部笔法的真实像素、时间定位及 JSON 重建。预热后分别记录生成、绘制耗时的中位数与 P95；工程检查通过不表示艺术质量已经验收。</p><pre id="verification" class="verification" data-status="running">检查中…</pre><canvas id="verification-canvas" class="verification-canvas" width="1280" height="800" aria-label="最后一个检查样例"></canvas></main>
     <script type="module" src="/examples/verify.mjs"></script>
   </body>
 </html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Ink Landscape · 起收转折第二批</title>
+    <link rel="stylesheet" href="/examples/style.css"><link rel="stylesheet" href="/examples/gesture-study.css">
+  </head>
+  <body>
+    <header class="site-header"><a class="wordmark" href="/">Ink Landscape <span>笔墨试验台</span></a><nav class="header-links"><a class="quiet-link" href="/examples/foundation-study.html">第一批 · 提按与墨态</a><a class="quiet-link" href="/examples/technique-atlas.html#reading-catalog">100 条阅读笔记</a></nav></header>
+    <main class="gesture-study" data-status="loading">
+      <section class="intro"><p class="eyebrow">BRUSHWORK · BATCH 02</p><h1>从入纸，到转身与离纸。</h1><p>起笔、收笔、转折。保留同一输入，比较不同动作，再检查换一条笔路后是否仍然成立。</p></section>
+      <div class="gesture-status"><span>3 组动作能力</span><span>逐笔可保存并继续修改</span><strong id="gesture-artistic-status">艺术效果 · 待评判</strong></div>
+      <form id="gesture-controls" class="gesture-controls">
+        <label>笔路布局<select id="gesture-path"><option value="straight">直行布局</option><option value="curve" selected>弧行布局</option><option value="corner">折行布局</option></select></label>
+        <label>种子<input id="gesture-seed" type="number" min="0" max="4294967295" step="1" value="261120" required></label>
+        <label class="gesture-toggle"><input id="gesture-overlay" type="checkbox">显示锋尖笔路</label><button type="submit">重新生成</button>
+      </form>
+      <div class="gesture-adjustments">
+        <label>几何动作强度 <output id="gesture-strength-value">0.90</output><input id="gesture-strength" type="range" min="0" max="1" step="0.01" value="0.9"></label>
+        <label>组合偏侧展开 <output id="gesture-side-value">0.80</output><input id="gesture-side" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+        <label>两笔组合尾段枯润 <output id="gesture-dry-value">0.72</output><input id="gesture-dry" type="range" min="0" max="1" step="0.01" value="0.72"></label>
+      </div>
+      <p class="gesture-conditions" id="gesture-conditions"></p>
+      <div class="gesture-column-key"><span>起点对照</span><span>改变动作</span><span>组合或另一收法</span></div>
+      <div id="gesture-studies"></div>
+      <section class="gesture-composition"><div><p class="eyebrow">COMPOSITION</p><h2>每一笔，都有自己的来去。</h2><p>两笔分别采用逆入提收、露入回行，并组合用锋和枯润。它们保留独立的原始笔路、动作与时间，可分别修改。</p></div><figure><canvas id="gesture-composition-canvas" width="560" height="240" aria-label="起收转折两笔组合"></canvas><figcaption>独立动作 · 两笔组合完整状态</figcaption></figure></section>
+      <section class="gesture-saving"><h2>保存这次练习</h2><p>JSON 保存原始笔路、动作模型、局部控制、编译结果与生成器版本。载入时重新编译并核对结果；同版本重放与艺术效果分别评判。</p><div class="gesture-actions"><button id="gesture-export-json" type="button">导出可编辑 JSON</button><button id="gesture-export-png" type="button">导出整批样片</button><label class="gesture-file">载入 JSON<input id="gesture-import-json" type="file" accept=".json,application/json"></label></div><details class="gesture-paste"><summary>粘贴单笔或整批 JSON</summary><textarea id="gesture-json-input" aria-label="待载入的动作 JSON" rows="5" placeholder="粘贴已导出的 JSON"></textarea><button id="gesture-load-text" type="button">载入粘贴内容</button></details><p id="gesture-import-status" role="status"></p><div id="gesture-imported" class="gesture-imported"></div></section>
+      <section class="gesture-check"><h2>复现与动作检查</h2><p>使用当前种子检查默认强度下的三种布局：原始输入、动作隔离、局部作用、保存重放及乱序定位。另查强度为零时几何动作关闭、偏侧和墨态独立生效。</p><button id="gesture-check" type="button">运行工程检查</button><pre id="gesture-verification" class="verification" data-status="idle">尚未运行</pre></section>
+      <p id="gesture-error" class="error" role="alert"></p>
+      <script id="gesture-record" type="application/json"></script>
+    </main><footer>固定动作的输入关系，保留创作自由。本批均为待评判的程序近似。</footer>
+    <script type="module" src="/examples/gesture-study.mjs"></script>
+  </body>
+</html>

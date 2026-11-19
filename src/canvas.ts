@@ -7,6 +7,9 @@ import type {
   Vec2,
   WashMark,
 } from './types.js';
+import { sampleStrokePath } from './path.js';
+import { copyStrokeBrush } from './brush-state.js';
+import { drawContactStroke } from './canvas-contact.js';
 
 const TAU = Math.PI * 2;
 const EPSILON = 1e-8;
@@ -16,6 +19,17 @@ interface PathSample extends Vec2 {
   readonly distance: number;
   readonly nx: number;
   readonly ny: number;
+}
+
+interface BrushSample extends PathSample {
+  readonly halfWidth: number;
+  readonly contact: readonly number[];
+}
+
+interface FiberSample extends Vec2 {
+  readonly nx: number;
+  readonly ny: number;
+  readonly radius: number;
 }
 
 function clamp(value: number, low = 0, high = 1): number {
@@ -81,7 +95,11 @@ function validate(scene: InkScene, options: RenderOptions): void {
       range(mark.dryness, 'stroke.dryness', 0, 1);
       finite(mark.tipAngle, 'stroke.tipAngle');
       if (mark.nib !== 'round' && mark.nib !== 'flat') throw new RangeError('Unknown stroke nib');
+      if (mark.smoothing !== undefined && mark.smoothing !== 'linear' && mark.smoothing !== 'catmull-rom') {
+        throw new RangeError('Unknown stroke smoothing');
+      }
       if (mark.clip !== undefined) validatePoints(mark.clip, 'stroke.clip', 3);
+      if (mark.brush !== undefined) copyStrokeBrush(mark.brush);
     } else if (mark.kind === 'wash') {
       validatePoints(mark.outline, 'wash.outline', 3);
       range(mark.roughness, 'wash.roughness', 0, 1);
@@ -113,40 +131,10 @@ function progressAt(start: number, duration: number, time: number): number {
 
 /** Sample the complete stroke first, so seeking never changes the texture seed. */
 function sampleStroke(mark: StrokeMark): PathSample[] {
-  const lengths = [0];
-  for (let i = 1; i < mark.points.length; i++) {
-    const a = mark.points[i - 1]!;
-    const b = mark.points[i]!;
-    lengths.push(lengths[i - 1]! + Math.hypot(b.x - a.x, b.y - a.y));
-  }
-  const total = lengths[lengths.length - 1]!;
-  if (total < EPSILON) {
-    const point = mark.points[0]!;
-    return [{ x: point.x, y: point.y, pressure: point.pressure ?? 1, distance: 0, nx: 0, ny: 1 }];
-  }
-  // A per-stroke sampling guard, not a limit on the number of scene marks.
-  const steps = Math.min(8192, Math.max(1, Math.ceil(total / clamp(mark.width * 0.12, 0.65, 4))));
-  const samples: PathSample[] = [];
-  let segment = 1;
-  for (let i = 0; i <= steps; i++) {
-    const distance = total * i / steps;
-    while (segment < mark.points.length - 1 && lengths[segment]! < distance) segment++;
-    while (segment < mark.points.length - 1
-      && lengths[segment]! - lengths[segment - 1]! < EPSILON) segment++;
-    const a = mark.points[segment - 1]!;
-    const b = mark.points[segment]!;
-    const segmentLength = lengths[segment]! - lengths[segment - 1]!;
-    const t = segmentLength < EPSILON ? 0 : clamp((distance - lengths[segment - 1]!) / segmentLength);
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const length = Math.hypot(dx, dy) || 1;
-    samples.push({
-      x: mix(a.x, b.x, t), y: mix(a.y, b.y, t),
-      pressure: mix(a.pressure ?? 1, b.pressure ?? 1, t),
-      distance, nx: -dy / length, ny: dx / length,
-    });
-  }
-  return samples;
+  return sampleStrokePath(mark.points, {
+    spacing: clamp(mark.width * 0.12, 0.65, 4),
+    smoothing: mark.smoothing ?? 'linear',
+  });
 }
 
 function partialSamples(samples: readonly PathSample[], progress: number): readonly PathSample[] {
@@ -158,10 +146,14 @@ function partialSamples(samples: readonly PathSample[], progress: number): reado
   const a = samples[end - 1]!;
   const b = samples[end]!;
   const t = (distance - a.distance) / (b.distance - a.distance);
+  const nx = mix(a.nx, b.nx, t);
+  const ny = mix(a.ny, b.ny, t);
+  const normalLength = Math.hypot(nx, ny);
   active.push({
     x: mix(a.x, b.x, t), y: mix(a.y, b.y, t),
     pressure: mix(a.pressure, b.pressure, t), distance,
-    nx: mix(a.nx, b.nx, t), ny: mix(a.ny, b.ny, t),
+    nx: normalLength > EPSILON ? nx / normalLength : b.nx,
+    ny: normalLength > EPSILON ? ny / normalLength : b.ny,
   });
   return active;
 }
@@ -180,14 +172,13 @@ function halfWidth(mark: StrokeMark, sample: PathSample): number {
 
 function ribbon(
   ctx: CanvasRenderingContext2D,
-  mark: StrokeMark,
-  samples: readonly PathSample[],
+  samples: readonly BrushSample[],
   scale = 1,
 ): void {
   ctx.beginPath();
   for (let i = 0; i < samples.length; i++) {
     const sample = samples[i]!;
-    const width = halfWidth(mark, sample) * scale;
+    const width = sample.halfWidth * scale;
     const x = sample.x + sample.nx * width;
     const y = sample.y + sample.ny * width;
     if (i === 0) ctx.moveTo(x, y);
@@ -195,7 +186,7 @@ function ribbon(
   }
   for (let i = samples.length - 1; i >= 0; i--) {
     const sample = samples[i]!;
-    const width = halfWidth(mark, sample) * scale;
+    const width = sample.halfWidth * scale;
     ctx.lineTo(sample.x - sample.nx * width, sample.y - sample.ny * width);
   }
   ctx.closePath();
@@ -203,26 +194,22 @@ function ribbon(
 
 function fiberRun(
   ctx: CanvasRenderingContext2D,
-  mark: StrokeMark,
-  samples: readonly PathSample[],
-  offset: number,
-  fiber: number,
-  count: number,
+  samples: readonly FiberSample[],
 ): void {
   if (samples.length < 2) return;
-  const points: Vec2[] = [];
-  const left: Vec2[] = [];
-  const right: Vec2[] = [];
-  for (const sample of samples) {
-    const width = halfWidth(mark, sample);
-    const wander = (noise(mark.seed, sample.distance / Math.max(8, mark.width * 0.7), fiber + 17) - 0.5) * 0.12;
-    const center = (offset + wander) * width;
-    const band = Math.max(0, width * (0.38 + hash(mark.seed, fiber, 51) * 0.45) / count);
-    left.push({ x: sample.x + sample.nx * (center + band), y: sample.y + sample.ny * (center + band) });
-    right.push({ x: sample.x + sample.nx * (center - band), y: sample.y + sample.ny * (center - band) });
+  ctx.beginPath();
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i]!;
+    const x = sample.x + sample.nx * sample.radius;
+    const y = sample.y + sample.ny * sample.radius;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
   }
-  points.push(...left, ...right.reverse());
-  polygon(ctx, points);
+  for (let i = samples.length - 1; i >= 0; i--) {
+    const sample = samples[i]!;
+    ctx.lineTo(sample.x - sample.nx * sample.radius, sample.y - sample.ny * sample.radius);
+  }
+  ctx.closePath();
   ctx.fill();
 }
 
@@ -250,7 +237,13 @@ function drawDot(ctx: CanvasRenderingContext2D, mark: StrokeMark, sample: PathSa
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, mark: StrokeMark, progress: number): void {
-  const samples = partialSamples(sampleStroke(mark), progress);
+  const complete = sampleStroke(mark);
+  const samples = partialSamples(complete, progress).map(sample => ({
+    ...sample, halfWidth: halfWidth(mark, sample),
+    // Neighboring tufts reuse four broad contact fields rather than recomputing each one.
+    contact: Array.from({ length: 4 }, (_, group) =>
+      noise(mark.seed, sample.distance / Math.max(8, mark.width * 1.3), group + 231)),
+  }));
   ctx.save();
   try {
     if (mark.clip) {
@@ -263,37 +256,68 @@ function drawStroke(ctx: CanvasRenderingContext2D, mark: StrokeMark, progress: n
       drawDot(ctx, mark, samples[0]!, progress);
       return;
     }
-    const base = mark.opacity * Math.pow(1 - mark.dryness, 1.7);
+    // Dry contact leaves actual paper between tufts instead of a continuous grey undercoat.
+    const base = mark.opacity * Math.pow(Math.max(0, 1 - mark.dryness / 0.78), 1.7);
     if (base > 0) {
       // A small stylized soft edge. This is not a fluid or paper-fibre simulation.
       if (mark.dryness < 0.3 && mark.width > 3) {
         ctx.globalAlpha = base * 0.09;
         ctx.shadowColor = mark.ink;
         ctx.shadowBlur = Math.min(3, mark.width * 0.12) * (1 - mark.dryness);
-        ribbon(ctx, mark, samples, 1.035);
+        ribbon(ctx, samples, 1.035);
         ctx.fill();
         ctx.shadowBlur = 0;
       }
       ctx.globalAlpha = base * 0.9;
-      ribbon(ctx, mark, samples);
+      ribbon(ctx, samples);
       ctx.fill();
     }
-    const count = Math.round(clamp(mark.width * 0.65 + 5, 6, 28));
+    const count = Math.round(clamp(mark.width * 0.45 + 6, 8, 24));
+    const length = complete[complete.length - 1]!.distance || 1;
     for (let fiber = 0; fiber < count; fiber++) {
-      const offset = ((fiber + 0.5) / count * 2 - 1) * 0.9;
-      const threshold = 0.08 + mark.dryness * 0.66;
-      const run: PathSample[] = [];
-      ctx.globalAlpha = mark.opacity * (0.13 + hash(mark.seed, fiber, 14) * 0.4)
-        * (0.35 + mark.dryness * 0.65);
+      // Unequal tuft placement and breadth break the old evenly spaced comb.
+      const broad = fiber % 6 === 0;
+      const offset = (hash(mark.seed, fiber, 81) * 2 - 1) * (broad ? 0.68 : 0.92);
+      const breadth = (broad ? 2.4 + hash(mark.seed, fiber, 51) * 1.4
+        : 0.18 + Math.pow(hash(mark.seed, fiber, 51), 2) * 1.3) / count;
+      const contactLength = Math.max(3, mark.width * (0.2 + hash(mark.seed, fiber, 82) * 0.55));
+      const phase = hash(mark.seed, fiber, 83) * 19;
+      const group = Math.floor((offset + 1) * 2);
+      const run: FiberSample[] = [];
+      let previous: FiberSample | undefined;
+      ctx.globalAlpha = mark.opacity * (0.22 + hash(mark.seed, fiber, 14) * 0.58)
+        * (0.5 + mark.dryness * 0.5);
       for (const sample of samples) {
-        const present = noise(mark.seed, sample.distance / Math.max(3, mark.width * 0.32), fiber + 43) >= threshold;
-        if (present) run.push(sample);
-        else {
-          fiberRun(ctx, mark, run, offset, fiber, count);
+        const along = sample.distance / contactLength + phase;
+        // Nearby bristles share some contact but retain independent gaps and splitting.
+        const shared = sample.contact[group]!;
+        const contact = noise(mark.seed, along, fiber + 43) * 0.74 + shared * 0.26;
+        const threshold = 0.04 + mark.dryness * 0.48 + Math.pow(mark.dryness, 3) * 0.17
+          - (broad ? 0.06 * (1 - mark.dryness) : 0) + (1 - sample.pressure) * 0.09
+          + mark.dryness * sample.distance / length * 0.06;
+        const amount = clamp((contact - threshold) / 0.22);
+        const taper = amount * amount * (3 - 2 * amount);
+        const drift = noise(mark.seed, along * 0.47, fiber + 17);
+        const wander = (drift - 0.5) * 0.19
+          + (shared - 0.5) * 0.12;
+        const band = sample.halfWidth * breadth * (0.35 + drift * 1.2)
+          * taper;
+        const center = clamp(offset + wander, -0.98, 0.98) * sample.halfWidth;
+        const radius = Math.max(0, Math.min(band, sample.halfWidth - Math.abs(center)));
+        const point = { x: sample.x + sample.nx * center, y: sample.y + sample.ny * center,
+          nx: sample.nx, ny: sample.ny, radius };
+        // Zero-width boundaries taper each contact locally, including during partial reveals.
+        if (radius > EPSILON) {
+          if (run.length === 0 && previous) run.push(previous);
+          run.push(point);
+        } else if (run.length > 0) {
+          run.push(point);
+          fiberRun(ctx, run);
           run.length = 0;
         }
+        previous = point;
       }
-      fiberRun(ctx, mark, run, offset, fiber, count);
+      fiberRun(ctx, run);
     }
   } finally {
     ctx.restore();
@@ -409,7 +433,8 @@ export function renderCanvas(
       if (progress <= 0 || mark.opacity <= 0) continue;
       ctx.globalAlpha = 1;
       if (mark.kind === 'stroke') {
-        drawStroke(ctx, mark, progress);
+        if (mark.brush) drawContactStroke(ctx, mark, progress);
+        else drawStroke(ctx, mark, progress);
         strokeCount++;
       } else {
         drawWash(ctx, mark, progress);

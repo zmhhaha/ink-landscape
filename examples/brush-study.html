@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ink Landscape · 笔法对照</title>
+    <link rel="stylesheet" href="/examples/style.css">
+  </head>
+  <body>
+    <header class="site-header"><a class="wordmark" href="/">Ink Landscape <span>笔墨试验台</span></a><nav class="header-links"><a class="quiet-link" href="/">返回试验台</a><a class="quiet-link" href="/examples/rock-study.html">岩石分面</a><a class="quiet-link" href="/examples/verify.html">运行检查</a></nav></header>
+    <main class="brush-study">
+      <section class="intro"><p class="eyebrow">BRUSH STUDY · CANVAS 2D</p><h1>看清转折，留下断白。</h1><p>固定输入，比较圆锋与侧锋的笔路，再换一组形状观察。两列采用相同的当前材质。</p></section>
+      <div class="comparison-toolbar"><p>种子 261119 · 每片 600 × 260 · 完成时间 3s</p><div><button id="study-export-png" type="button">导出整页 PNG</button><button id="study-export-json" type="button">导出笔触 JSON</button></div></div>
+      <section id="brush-comparisons" class="comparison-grid" aria-label="局部笔法与换形样片"></section>
+      <p class="scope-note">平滑会改变控制点之间的形状；需要明确棱角时保留原始折线。飞白为程序化视觉近似，这些样片用于观察改善与退步，尚未完成传统技法艺术验收。</p>
+      <p id="study-error" class="error" role="alert"></p>
+    </main>
+    <footer>保留源码、输入与种子，逐项判断笔势和墨量。</footer>
+    <script type="module" src="/examples/brush-study.mjs"></script>
+  </body>
+</html>

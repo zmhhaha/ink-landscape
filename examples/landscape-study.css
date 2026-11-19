@@ -1,0 +1,20 @@
+.landscape-study { max-width: 1380px; }
+.landscape-hero { margin: 24px 0 16px; }
+.landscape-hero canvas { width: 100%; height: auto; display: block; border: 1px solid var(--line, #deded4); }
+.landscape-hero figcaption, .landscape-comparison figcaption, .landscape-layer-grid figcaption { margin-top: 10px; color: #656c61; font-size: 13px; line-height: 1.7; }
+.landscape-metrics { display: flex; gap: 44px; flex-wrap: wrap; margin: 24px 0 10px; }
+.landscape-metrics dt { font-size: 12px; color: #73796f; }
+.landscape-metrics dd { margin: 6px 0 0; font-variant-numeric: tabular-nums; }
+.landscape-check, .landscape-history { margin-top: 48px; }
+.landscape-check h2, .landscape-history h2 { font-weight: 500; }
+#landscape-layers { margin-top: 28px; padding: 20px 0; border-block: 1px solid #deded4; }
+#landscape-layers summary { cursor: pointer; }
+.landscape-layer-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+.landscape-layer-grid figure, .landscape-comparison figure { margin: 0; }
+.landscape-layer-grid canvas { width: 100%; height: auto; background-color: #ddd; background-image: conic-gradient(#eee 25%, transparent 0 50%, #eee 0 75%, transparent 0); background-size: 20px 20px; }
+.landscape-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.landscape-comparison canvas { width: 100%; height: auto; border: 1px solid #deded4; }
+.rock-toolbar input[type=range] { width: 160px; }
+.rock-toolbar output { font-size: 12px; min-width: 40px; }
+.landscape-check .verification { max-height: 440px; overflow: auto; }
+@media (max-width: 720px) { .landscape-comparison, .landscape-layer-grid { grid-template-columns: 1fr; } .landscape-metrics { gap: 22px; } }

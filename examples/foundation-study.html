@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Ink Landscape · 基础笔法第一批</title>
+    <link rel="stylesheet" href="/examples/style.css"><link rel="stylesheet" href="/examples/foundation-study.css">
+  </head>
+  <body>
+    <header class="site-header"><a class="wordmark" href="/">Ink Landscape <span>笔墨试验台</span></a><nav class="header-links"><a class="quiet-link" href="/examples/technique-atlas.html#reading-catalog">100 条阅读笔记</a><a class="quiet-link" href="/examples/brush-study.html">此前对照</a></nav></header>
+    <main class="foundation-study" data-status="loading">
+      <section class="intro"><p class="eyebrow">BRUSHWORK · BATCH 01</p><h1>把动作，留在笔迹里。</h1><p>提按、中锋与侧锋、枯润与飞白。先看同题差异，再换笔路观察，最后检验能否组合。</p></section>
+      <div class="foundation-status"><span>3 组基础能力</span><span>可保存并继续修改</span><strong id="foundation-artistic-status">首批展示样片 · 用户已认可</strong></div>
+      <form id="foundation-controls" class="foundation-controls">
+        <label>同题笔路<select id="foundation-path"><option value="straight">直线</option><option value="curve" selected>弧线</option><option value="corner">急转折线</option></select></label>
+        <label>种子<input id="foundation-seed" type="number" min="0" max="4294967295" step="1" value="261119" required></label>
+        <label class="foundation-toggle"><input id="foundation-overlay" type="checkbox">显示锋尖笔路</label><button type="submit">重新生成</button>
+      </form>
+      <div class="foundation-adjustments">
+        <label>中段按笔 <output id="foundation-press-value">0.92</output><input id="foundation-press" type="range" min="0.2" max="1" step="0.01" value="0.92"></label>
+        <label>用锋转换位置 <output id="foundation-switch-value">55%</output><input id="foundation-switch" type="range" min="0.2" max="0.8" step="0.01" value="0.55"></label>
+        <label>笔尾枯润 <output id="foundation-dry-value">0.90</output><input id="foundation-dry" type="range" min="0.1" max="1" step="0.01" value="0.9"></label>
+      </div>
+      <p class="foundation-conditions" id="foundation-conditions"></p>
+      <div class="foundation-column-key"><span>保持基线</span><span>单一变量</span><span>组合观察</span></div>
+      <div id="foundation-studies"></div>
+      <section class="foundation-composition"><div><p class="eyebrow">COMPOSITION</p><h2>两笔相接，仍可分别修改。</h2><p>前后两笔保留独立的输入与时间。观察相交处的墨色和不同笔势；这里尚不作传统积墨法的验收。</p></div><figure><canvas id="foundation-composition-canvas" width="560" height="240" aria-label="两笔组合样片"></canvas><figcaption>两笔顺序叠加 · 完整状态</figcaption></figure></section>
+      <section class="foundation-saving"><h2>保存这次练习</h2><p>JSON 同时保存原始笔路、技法设定、局部控制、生成结果及生成器版本。载入时重新编译并核对保存结果。</p><div class="foundation-actions"><button id="foundation-export-json" type="button">导出可编辑 JSON</button><button id="foundation-export-png" type="button">导出整批样片</button><label class="foundation-file">载入 JSON<input id="foundation-import-json" type="file" accept=".json,application/json"></label></div><details class="foundation-paste"><summary>粘贴单笔或整批 JSON</summary><textarea id="foundation-json-input" aria-label="待载入的笔法 JSON" rows="5" placeholder="粘贴已导出的 JSON"></textarea><button id="foundation-load-text" type="button">载入粘贴内容</button></details><p id="foundation-import-status" role="status"></p><div id="foundation-imported" class="foundation-imported"></div></section>
+      <section class="foundation-check"><h2>复现与控制检查</h2><p>验证保存重放、乱序时间定位、局部编辑、零压力与露纸。工程检查通过不会自动改变艺术评判状态。</p><button id="foundation-check" type="button">运行工程检查</button><pre id="foundation-verification" class="verification" data-status="idle">尚未运行</pre></section>
+      <p id="foundation-error" class="error" role="alert"></p>
+      <script id="foundation-record" type="application/json"></script>
+    </main><footer>固定技法含义，保留创作自由。首批展示原样已获用户认可；其他笔路与修改另行观察。</footer>
+    <script type="module" src="/examples/foundation-study.mjs"></script>
+  </body>
+</html>

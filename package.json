@@ -19,7 +19,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test",
     "dev": "npm run build && node scripts/serve.mjs",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit",
+    "learning:build": "npm run build && node scripts/compile-learning.mjs && npm run build"
   },
   "engines": { "node": ">=20" },
   "devDependencies": { "typescript": "~5.9.3" }
