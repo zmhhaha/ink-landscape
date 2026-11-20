@@ -32,5 +32,7 @@ export { createVegetationDocument, compileVegetationRecipe, reviseVegetationDocu
 export type * from './vegetation-document.js';
 export { createStrokeGroupDocument, compileStrokeGroupRecipe, reviseStrokeGroupDocument } from './stroke-group-document.js';
 export type * from './stroke-group-document.js';
+export { createTreeMacro, createRockMacro, createBirdMacro } from './subject-macros.js';
+export type * from './subject-macros.js';
 export { TECHNIQUE_STUDY_BATCHES, getTechniqueStudies } from './technique-studies.js';
 export type * from './technique-studies.js';

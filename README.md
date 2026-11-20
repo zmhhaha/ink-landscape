@@ -4,6 +4,8 @@
 
 [枯木寒鸦代码临摹](examples/bada-study.html)使用现有笔组与墨层接口组织一幅完整习作，支持PNG和编辑源导出；[配方与重建说明](docs/bada-code-study.md)记录构图来源、局部修改及验证范围。
 
+[树、石、鸟复合源](docs/subject-macros.md)提供可选的 `createTreeMacro()`、`createRockMacro()`、`createBirdMacro()`，将分枝、岩骨皴染、分件鸟组合为普通可编辑笔组。调用者可提供自己的骨架、区域、方向场或部件；[复合源浏览页](examples/subject-macros.html)可保存三项合图和JSON。这些模板仍是待艺术评价的程序近似。
+
 目前是工程原型，整体技法库尚未完成艺术效果验收；首批三组回修前的归档样片曾获用户视觉认可，范围和局限见[首批记录](docs/foundation-review.md)，不延伸为回修后材质的认可。披麻皴、斧劈皴等名称表示受传统技法启发的程序近似，不代表已掌握传统画法，也不承诺复现任何参考作品。
 
 2026-11-20起，按用户对前十二批的反馈回修毛边、分束、水墨交界与笔组组织。[十二批回修浏览页](examples/revision-review.html)可逐批换形、保存三项合并图与编辑源，并进入原试验台逐笔调整；[首轮记录](docs/twelve-batch-material-revision.md)说明材质回修，[第二轮记录](docs/hierarchy-water-growth-revision.md)说明水线沉积、皴笔浓淡、生长方向与收笔飞丝。随机性来自固定种子，几何与普通源保持可编辑；用户对首轮单笔质感的评价不扩为第二轮组合效果的验收。
@@ -138,6 +140,9 @@ npm test
 | `reviseVegetationDocument(document, { units?, options? })` | 从编辑源修改植被单元；单元数组整体替换，公共选项浅合并 |
 | `compileVegetationRecipe(recipe)` | 从版本化植被编辑源重建可重放场景 |
 | `createStrokeGroupDocument(groups, options)` | 执行作者笔组及逐笔控制，保存稳定身份和可选父组关系，不推断技法或对象结构 |
+| `createTreeMacro(options)` | 生成有界递归分枝或执行自有枝架，输出共享交点、收尖笔路和具名附着点 |
+| `createRockMacro(options)` | 组合骨线、淡面、皴擦与点苔，可传自有轮廓、区域、岩脊和方向场 |
+| `createBirdMacro(options)` | 输出可替换的七类鸟部件，以显式落脚点定位，保留普通笔组和附着数据 |
 | `compileStrokeGroupRecipe(recipe)` / `reviseStrokeGroupDocument(document, patch)` | 重建或修改普通笔组源，保留其他笔组身份与材质种子 |
 | `getTechniqueStudies(id)` | 返回100项目录对应的独立研究批次与浏览入口；不代表具名预设或艺术通过 |
 | `transformVegetationUnit(document, unitId, transform)` | 对一个作者单元平移、绕显式支点旋转或按有效笔宽缩放；重建普通植被文档 |
