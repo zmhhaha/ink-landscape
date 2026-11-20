@@ -1,4 +1,4 @@
-import { renderCanvas, TECHNIQUE_CATALOG, TECHNIQUE_CATEGORIES, TECHNIQUE_SOURCES, findTechniques, getTechniqueStudies } from '../dist/index.js';
+import { renderCanvas, TECHNIQUE_CATALOG, TECHNIQUE_CATEGORIES, TECHNIQUE_SOURCES, findTechniques, getTechniqueStudies, getTechniqueRevisions } from '../dist/index.js';
 import { makeTechniqueStudies, techniqueStudyInputs } from './technique-fixtures.mjs';
 import { verifyTechniqueStudies } from './technique-verify.mjs';
 
@@ -129,6 +129,9 @@ function catalogue() {
     for (const batch of getTechniqueStudies(item.id)) {
       const link = document.createElement('a'); link.href = `/${batch.example}`;
       link.textContent = `第${batch.number}批研究对照`; progress.append(link);
+    }
+    for (const revision of getTechniqueRevisions(item.id)) {
+      const link=document.createElement('a');link.href=`/${revision.example}`;link.textContent=revision.title;progress.append(link);
     }
     row.append(title, target, evidence, progress); rows.append(row);
   }

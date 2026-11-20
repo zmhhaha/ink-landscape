@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>已有笔法 · 四组优化对照</title>
+<link rel="stylesheet" href="./existing-technique-revision.css">
+<main>
+  <h1>已有笔法 · 四组优化对照</h1>
+  <p>按墨水、点皴、线皴、散锋的顺序比较。每项保留原组织、优化组织及换形前后，固定种子与渲染条件。</p>
+  <nav aria-label="选择笔法组">
+    <button data-family="ink">1 · 积墨与用水</button><button data-family="points">2 · 点皴与点苔</button>
+    <button data-family="lines">3 · 线皴与斧劈</button><button data-family="split">4 · 散锋与破笔</button>
+  </nav>
+  <div class="toolbar"><button id="save-png">保存本组对照图</button><button id="save-source">保存全部编辑源</button>
+    <button id="check-replay">检查本组重建</button><span id="status" role="status">正在生成…</span></div>
+  <section id="gallery" aria-label="优化与换形对照"></section>
+  <section id="wet-stages"><h2>同一清水接触 · 初湿、半干与干后</h2><div id="stage-gallery"></div></section>
+  <section id="mi-control" hidden><h2>米点控制 · 同锚点、时序与墨量</h2><div id="mi-gallery" class="pair"></div><p id="mi-note" class="note"></p></section>
+  <details><summary>编辑一项的逐笔源</summary>
+    <label for="case-select">选择样片</label><select id="case-select"></select>
+    <label for="recipe-source">优化列配方 JSON</label><textarea id="recipe-source" spellcheck="false"></textarea>
+    <div class="toolbar"><button id="apply-source">重绘所选样片</button><button id="restore-source">还原所选样片</button><span id="edit-status" role="status"></span></div>
+  </details>
+  <p>这些是传统技法的程序近似，工程重建与艺术评价分别记录。<a href="./index.html">返回试验台</a></p>
+</main>
+<script type="module" src="./existing-technique-revision.mjs"></script>
+</html>

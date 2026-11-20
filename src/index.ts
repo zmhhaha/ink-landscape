@@ -36,5 +36,9 @@ export { createTreeMacro, createRockMacro, createBirdMacro } from './subject-mac
 export type * from './subject-macros.js';
 export { createBarkDocument, compileBarkRecipe, reviseBarkDocument } from './bark-document.js';
 export type * from './bark-document.js';
-export { TECHNIQUE_STUDY_BATCHES, getTechniqueStudies } from './technique-studies.js';
+export { createPointTextureDocument, compilePointTextureRecipe, revisePointTextureDocument } from './point-texture.js';
+export type * from './point-texture.js';
+export { createSurfaceCunDocument, compileSurfaceCunRecipe, reviseSurfaceCunDocument } from './surface-cun.js';
+export type * from './surface-cun.js';
+export { TECHNIQUE_STUDY_BATCHES, getTechniqueStudies, TECHNIQUE_REVISIONS, getTechniqueRevisions } from './technique-studies.js';
 export type * from './technique-studies.js';

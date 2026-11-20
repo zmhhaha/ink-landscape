@@ -42,3 +42,20 @@ export const TECHNIQUE_STUDY_BATCHES: readonly TechniqueStudyBatch[] = Object.fr
 export function getTechniqueStudies(id: string): readonly TechniqueStudyBatch[] {
   return Object.freeze(TECHNIQUE_STUDY_BATCHES.filter(batch => batch.techniqueIds.includes(id)));
 }
+
+export interface TechniqueRevisionStudy {
+  readonly id: string;
+  readonly title: string;
+  readonly techniqueIds: readonly string[];
+  readonly example: string;
+}
+/** New comparisons retain their own identity; historical batch numbering is unchanged. */
+export const TECHNIQUE_REVISIONS: readonly TechniqueRevisionStudy[] = Object.freeze([
+  {id:'ink-20261120',title:'积墨与用水回修',techniqueIds:['ink-layered','ink-broken','water-break-ink','ink-break-water','water-collision'],family:'ink'},
+  {id:'points-20261120',title:'点皴与岩脊组织回修',techniqueIds:['cun-yudian','cun-douban','cun-dingtou','cun-midian','vegetation-moss'],family:'points'},
+  {id:'lines-20261120',title:'顺坡与断面皴笔回修',techniqueIds:['cun-pima','cun-jiesuo','cun-niumao','cun-axe','cun-zhedai'],family:'lines'},
+  {id:'split-20261120',title:'散锋与破笔回修',techniqueIds:['brush-split','leaf-broken','cun-baoshi'],family:'split'},
+].map(({family,...item})=>Object.freeze({...item,techniqueIds:Object.freeze(item.techniqueIds),example:`examples/existing-technique-revision.html?family=${family}`})));
+export function getTechniqueRevisions(id: string): readonly TechniqueRevisionStudy[] {
+  return Object.freeze(TECHNIQUE_REVISIONS.filter(study=>study.techniqueIds.includes(id)));
+}

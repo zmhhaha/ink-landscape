@@ -40,6 +40,8 @@ export interface InkProcessOptions {
   readonly background?: string;
   /** One six-digit hex pigment colour for the complete process. */
   readonly ink?: string;
+  /** Explicit event-time binding of pigment; omitted preserves the original exchange model. */
+  readonly wetModel?: 'settling-v1';
 }
 
 export interface InkProcessLayer {
@@ -63,6 +65,7 @@ export interface InkProcess {
   readonly seed: number;
   readonly background: string;
   readonly ink: string;
+  readonly wetModel?: 'settling-v1';
   readonly layers: readonly InkProcessLayer[];
 }
 
@@ -104,6 +107,10 @@ export interface InkPigmentFrame {
   readonly activeLayers: number;
   /** Number of layer events with a nonempty, still-wet interaction region. */
   readonly interactions: number;
+  /** Present with settling-v1, evaluated at the latest included event, not wall-clock time. */
+  readonly mobileDensity?: Float32Array;
+  readonly settledDensity?: Float32Array;
+  readonly wetness?: Float32Array;
 }
 
 const GENERATOR = 'ink-layer-process-v1';
@@ -115,14 +122,14 @@ const layerFields = new Set(['id', 'strokes', 'concentration', 'water', 'at', 'd
 const strokeFields = new Set(['points', 'options']);
 const strokeOptionFields = new Set(['id', 'width', 'opacity', 'dryness', 'smoothing', 'seed', 'clip',
   'axis', 'entry', 'finish', 'pressureProfile', 'turn', 'rhythm', 'drag', 'strength', 'controls', 'gestureModel']);
-const processOptionFields = new Set(['width', 'height', 'seed', 'background', 'ink']);
+const processOptionFields = new Set(['width', 'height', 'seed', 'background', 'ink', 'wetModel']);
 const pointFields = new Set(['x', 'y', 'pressure']);
 const vectorFields = new Set(['x', 'y']);
 const controlFields = new Set(['at', 'pressure', 'side', 'angle', 'dryness', 'inkLoad']);
 const resultLayerFields = new Set(['id', 'marks', 'concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness', 'edgeDeposit', 'edgeWidth']);
 const markFields = new Set(['kind', 'id', 'points', 'width', 'ink', 'opacity', 'dryness', 'nib', 'smoothing',
   'tipAngle', 'seed', 'clip', 'start', 'duration', 'brush']);
-type CanonicalOptions = Required<InkProcessOptions>;
+type CanonicalOptions = Required<Omit<InkProcessOptions, 'wetModel'>> & Pick<InkProcessOptions, 'wetModel'>;
 
 const clamp = (value: number): number => Math.max(0, Math.min(1, value));
 function fields(value: object, allowed: ReadonlySet<string>, name: string): void {
@@ -183,10 +190,12 @@ function noise(seed: number, along: number, across: number): number {
 
 function canonicalOptions(options: InkProcessOptions): CanonicalOptions {
   fields(options, processOptionFields, 'ink process option');
+  if (options.wetModel !== undefined && options.wetModel !== 'settling-v1') throw new RangeError('Unsupported ink wet model');
   return Object.freeze({
     width: positive(options.width, 'width'), height: positive(options.height, 'height'),
     seed: seedValue(options.seed ?? 1), background: colour(options.background ?? '#f5f2e9', 'background'),
     ink: colour(options.ink ?? '#20251f', 'ink'),
+    ...(options.wetModel === undefined ? {} : { wetModel: options.wetModel }),
   });
 }
 function validateStrokeSource(source: InkStrokeSource): void {
@@ -309,8 +318,9 @@ function validateProcess(process: InkProcess): boolean {
   const immutable = deeplyFrozen(process);
   if (immutable && validated.has(process)) return true;
   if (!process || process.version !== 1) throw new RangeError('Unsupported ink process version');
-  fields(process, new Set(['version', 'width', 'height', 'seed', 'background', 'ink', 'layers']), 'ink process');
-  canonicalOptions({ width: process.width, height: process.height, seed: process.seed, background: process.background, ink: process.ink });
+  fields(process, new Set(['version', 'width', 'height', 'seed', 'background', 'ink', 'wetModel', 'layers']), 'ink process');
+  canonicalOptions({ width: process.width, height: process.height, seed: process.seed, background: process.background, ink: process.ink,
+    ...(process.wetModel === undefined ? {} : { wetModel: process.wetModel }) });
   seedValue(process.seed); colour(process.background, 'background'); colour(process.ink, 'ink');
   if (!Array.isArray(process.layers) || process.layers.length > MAX_LAYERS) throw new RangeError('Ink processes support at most 32 layers');
   const ids = new Set<string>(), markIds = new Set<string>();
@@ -471,7 +481,7 @@ function prepareMasks(process: InkProcess, columns: number, rows: number, cellSi
   });
   const needsWetMaps = process.layers.some((layer, index) => layer.mode === 'wet-mix' && layer.water > 0
     && process.layers.slice(0, index).some(earlier => earlier.water > 0 && earlier.dryAfter > layer.at - earlier.at));
-  const paper = needsWetMaps ? paperField(process.seed, columns, rows, cellSize)
+  const paper = needsWetMaps || process.wetModel ? paperField(process.seed, columns, rows, cellSize, process.wetModel)
     : { uptake: new Float32Array(0), horizontal: new Float32Array(0), vertical: new Float32Array(0) };
   const radius = Math.max(1, Math.min(8, Math.ceil(7 / cellSize)));
   const wetLayers = needsWetMaps ? layers.map(layer => spread(layer, columns, rows, radius, paper)) : [];
@@ -485,13 +495,17 @@ function prepareMasks(process: InkProcess, columns: number, rows: number, cellSi
   }
   return masks;
 }
-function paperField(seed: number, columns: number, rows: number, cellSize: number): PaperField {
+function paperField(seed: number, columns: number, rows: number, cellSize: number, model?: 'settling-v1'): PaperField {
   const uptake = new Float32Array(columns * rows), horizontal = new Float32Array(uptake.length), vertical = new Float32Array(uptake.length);
   for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
     const px = (x + .5) * cellSize, py = (y + .5) * cellSize, i = y * columns + x;
     const coarse = noise(seed ^ 0x6d2b79f5, px / 11, py / 11);
     const grain = noise(seed ^ 0x45d9f3b, px / 3.2 + py / 17, py / 4.7);
     uptake[i] = clamp((coarse * .65 + grain * .35 - .18) / .65);
+    if (model) {
+      const field = getFractalNoise2D(px / 31 + 7.17, py / 27 + 11.31, seed ^ 0x729a51f3, 4);
+      uptake[i] = clamp(.45 + field * .64 + (grain - .5) * .25);
+    }
     const angle = (noise(seed ^ 0x119de1f3, px / 43, py / 43) - .5) * Math.PI;
     horizontal[i] = .22 + .78 * Math.cos(angle) ** 2;
     vertical[i] = .22 + .78 * Math.sin(angle) ** 2;
@@ -628,6 +642,150 @@ function depositAtFront(density: Float32Array, mobility: Float32Array, front: Fl
   }
 }
 
+/** Conservative, bounded event transport along the local wet-field falloff. */
+function carryToWetFront(pigment: Float32Array, mobility: Float32Array, front: Float32Array,
+  columns: number, rows: number, cellSize: number, paper: PaperField, seed: number): void {
+  const targets = new Int32Array(pigment.length); targets.fill(-1);
+  const release = new Float32Array(pigment.length);
+  const gradientReach = Math.max(1, Math.min(8, Math.round(5 / cellSize)));
+  const reach = Math.max(2, Math.min(24, Math.round(14 / cellSize)));
+  const at = (x: number, y: number): number => front[Math.max(0, Math.min(rows - 1, y)) * columns + Math.max(0, Math.min(columns - 1, x))]!;
+  for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
+    const i = y * columns + x, wet = front[i]!;
+    if (wet <= 0 || mobility[i]! <= 0) continue;
+    const px = (x + .5) * cellSize, py = (y + .5) * cellSize;
+    const field = noise(seed ^ 0x815ea13f, px / 21 + 4.7, py / 25 + 7.3) - .5;
+    let dx = at(x - gradientReach, y) - at(x + gradientReach, y);
+    let dy = at(x, y - gradientReach) - at(x, y + gradientReach);
+    // Coherent paper direction supplies local drainage within nearly flat wet
+    // interiors; the actual wet boundary still stops every transport path.
+    dx += field * .18;
+    dy += (noise(seed ^ 0x437ab129, px / 27 + 13.1, py / 19 + 19.7) - .5) * .18;
+    dx *= paper.horizontal[i]!; dy *= paper.vertical[i]!;
+    const magnitude = Math.hypot(dx, dy);
+    if (magnitude < 1e-8) continue;
+    dx /= magnitude; dy /= magnitude;
+    let target = -1;
+    for (let step = 1; step <= reach; step++) {
+      const tx = Math.round(x + dx * step), ty = Math.round(y + dy * step);
+      if (tx < 0 || tx >= columns || ty < 0 || ty >= rows) break;
+      const next = ty * columns + tx;
+      if (mobility[next]! <= 0 || front[next]! <= 0) break;
+      target = next;
+      if (front[next]! < wet * (.3 + paper.uptake[next]! * .25)) break;
+    }
+    if (target !== -1 && target !== i) {
+      targets[i] = target;
+      const segment = clamp((.26 + field * 1.4 + (paper.uptake[target]! - .5) * .4) / .45);
+      release[i] = .68 * Math.sqrt(clamp(front[i]!)) * (.65 + paper.uptake[target]! * .35) * segment;
+    }
+  }
+  const change = new Float64Array(pigment.length);
+  for (let step = 0; step < 2; step++) {
+    change.fill(0);
+    for (let i = 0; i < pigment.length; i++) {
+      const target = targets[i]!;
+      if (target < 0) continue;
+      const amount = pigment[i]! * release[i]!;
+      change[i] = change[i]! - amount; change[target] = change[target]! + amount;
+    }
+    for (let i = 0; i < pigment.length; i++) pigment[i] = pigment[i]! + change[i]!;
+  }
+}
+
+/** The selected model binds pigment at authored events; bound pigment never re-enters exchange. */
+function rasterizeSettling(process: InkProcess, masks: Masks, activeLayers: number, cellSize: number): InkPigmentFrame {
+  const { columns, rows, paper } = masks, size = columns * rows;
+  const mobile: Float32Array[] = [], settled: Float32Array[] = [];
+  let interactions = 0, previousAt = 0;
+  const frontAt = (front: Float32Array, x: number, y: number): number =>
+    front[Math.max(0, Math.min(rows - 1, y)) * columns + Math.max(0, Math.min(columns - 1, x))]!;
+  for (let index = 0; index < activeLayers; index++) {
+    const layer = process.layers[index]!;
+    // A survival ratio accounts for the elapsed fraction of each contributor's
+    // own wet window. Additional events subdivide the same binding schedule.
+    for (let contributor = 0; contributor < index; contributor++) {
+      const source = process.layers[contributor]!;
+      const age = source.dryAfter > 0 ? clamp((layer.at - source.at) / source.dryAfter) : 1;
+      const oldAge = source.dryAfter > 0 ? clamp((previousAt - source.at) / source.dryAfter) : 1;
+      for (let i = 0; i < size; i++) {
+        const exponent = 1.1 + paper.uptake[i]! * 1.6;
+        const ratio = oldAge < 1 ? Math.pow((1 - age) / (1 - oldAge), exponent) : 0;
+        const amount = mobile[contributor]![i]! * (1 - ratio);
+        mobile[contributor]![i] = mobile[contributor]![i]! - amount;
+        settled[contributor]![i] = settled[contributor]![i]! + amount;
+      }
+    }
+    previousAt = layer.at;
+    const moving = new Float32Array(size), bound = new Float32Array(size);
+    for (let i = 0; i < size; i++) {
+      const amount = masks.layers[index]![i]! * layer.concentration * 2.6;
+      const release = layer.dryAfter > 0 ? layer.water * (.76 - paper.uptake[i]! * .22) : 0;
+      moving[i] = amount * release; bound[i] = amount - moving[i]!;
+    }
+    mobile.push(moving); settled.push(bound);
+    if (layer.mode !== 'wet-mix' || layer.water === 0) continue;
+    const previousWater = new Float32Array(size), contributors = [index];
+    for (let earlier = 0; earlier < index; earlier++) {
+      const source = process.layers[earlier]!;
+      if (source.water === 0 || source.dryAfter === 0 || layer.at - source.at >= source.dryAfter) continue;
+      const remaining = source.water * (1 - (layer.at - source.at) / source.dryAfter);
+      const wet = masks.wetLayers[earlier]!;
+      for (let i = 0; i < size; i++) previousWater[i] = Math.max(previousWater[i]!, wet[i]! * remaining);
+      contributors.push(earlier);
+    }
+    if (contributors.length === 1) continue;
+    const incoming = masks.wetLayers[index]!, mobility = new Float32Array(size), front = new Float32Array(size);
+    let affected = false;
+    for (let i = 0; i < size; i++) {
+      const x = (i % columns + .5) * cellSize, y = (Math.floor(i / columns) + .5) * cellSize;
+      const field = getFractalNoise2D(x / 29 + 17.3, y / 23 + 9.7, process.seed ^ hashText(layer.id), 4);
+      const irregular = clamp(.58 + field * .65);
+      mobility[i] = Math.min(previousWater[i]!, incoming[i]! * layer.water) * irregular;
+      front[i] = Math.min(previousWater[i]!, incoming[i]! * layer.water);
+      if (mobility[i]! > 0) affected = true;
+    }
+    if (!affected) continue;
+    const steps = Math.max(8, Math.min(64, Math.round(64 / cellSize)));
+    for (const contributor of contributors) {
+      if (process.layers[contributor]!.concentration === 0) continue;
+      const pigment = mobile[contributor]!;
+      carryToWetFront(pigment, mobility, front, columns, rows, cellSize, paper, process.seed ^ hashText(layer.id));
+      exchange(pigment, mobility, columns, rows, steps, paper);
+      depositAtFront(pigment, mobility, front, columns, rows, cellSize, paper,
+        process.seed ^ hashText(layer.id), layer.marks);
+      // Immobilize a broken inner front from the pigment that reached it.
+      // This produces a local waterline without adding or painting an outline.
+      for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
+        const i = y * columns + x, center = front[i]!;
+        if (center <= 0 || mobility[i]! <= 0) continue;
+        const neighbour = Math.max(frontAt(front, x - 2, y), frontAt(front, x + 2, y),
+          frontAt(front, x, y - 2), frontAt(front, x, y + 2));
+        const edge = clamp((neighbour - center) / Math.max(.01, neighbour));
+        const amount = pigment[i]! * edge * (.08 + paper.uptake[i]! * .32);
+        pigment[i] = pigment[i]! - amount;
+        settled[contributor]![i] = settled[contributor]![i]! + amount;
+      }
+    }
+    interactions++;
+  }
+  const mobileDensity = new Float32Array(size), settledDensity = new Float32Array(size);
+  const density = new Float32Array(size), wetness = new Float32Array(size);
+  for (let index = 0; index < activeLayers; index++) {
+    const source = process.layers[index]!;
+    const remaining = source.dryAfter > 0 ? source.water * (1 - clamp((previousAt - source.at) / source.dryAfter)) : 0;
+    const wet = masks.wetLayers[index] ?? masks.layers[index]!;
+    for (let i = 0; i < size; i++) {
+      mobileDensity[i] = mobileDensity[i]! + mobile[index]![i]!;
+      settledDensity[i] = settledDensity[i]! + settled[index]![i]!;
+      wetness[i] = Math.max(wetness[i]!, clamp(wet[i]! * remaining));
+    }
+  }
+  for (let i = 0; i < size; i++) density[i] = mobileDensity[i]! + settledDensity[i]!;
+  return { width: process.width, height: process.height, columns, rows, cellSize,
+    density, activeLayers, interactions, mobileDensity, settledDensity, wetness };
+}
+
 /**
  * Event-based optical-density approximation. Wet contact redistributes pigment
  * only near intersections with an earlier authored wet window. It is neither
@@ -641,6 +799,7 @@ export function rasterizeInkProcess(process: InkProcess, options: InkProcessRast
   if (!Number.isSafeInteger(columns * rows) || columns * rows > MAX_CELLS) throw new RangeError('Ink raster supports at most 262144 cells; increase cellSize');
   const masks = prepareMasks(process, columns, rows, cellSize, immutable), density = new Float32Array(columns * rows);
   const activeLayers = process.layers.filter(layer => options.time === undefined || layer.at <= options.time).length;
+  if (process.wetModel === 'settling-v1') return rasterizeSettling(process, masks, activeLayers, cellSize);
   // Keep pigment attribution after each exchange. A contribution stops moving
   // when its own authored wet window closes, even if later water touches it.
   const contributions: Float32Array[] = [];

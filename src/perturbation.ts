@@ -29,6 +29,14 @@ export interface SplitBristleOptions {
   readonly variance?: number;
   /** Desired sampling distance; capped at 100000 total source points. Default 2. */
   readonly spacing?: number;
+  /** Explicit authoring model; omitted preserves the original split geometry. */
+  readonly dynamics?: 'contact-lag-v1';
+  /** Direction memory in scene units; new model only, default spread * .85. */
+  readonly lag?: number;
+  /** Gathering of outer contacts during release, 0..1; new model default 1. */
+  readonly release?: number;
+  /** Broken outer-contact intervals, 0..1; new model default .65. */
+  readonly breakup?: number;
 }
 export interface SplitBristle {
   readonly id: string;
@@ -162,12 +170,17 @@ export function jitterPath(points: readonly InkPoint[], intensity: number, optio
  */
 export function splitBristles(path: readonly InkPoint[], count: number, options: SplitBristleOptions = {}): readonly SplitBristle[] {
   if (!Number.isInteger(finite(count, 'count')) || count < 1 || count > 64) throw new RangeError('count must be an integer in 1..64');
-  optionsObject(options, ['seed', 'spread', 'width', 'opacity', 'variance', 'spacing']);
+  optionsObject(options, ['seed', 'spread', 'width', 'opacity', 'variance', 'spacing', 'dynamics', 'lag', 'release', 'breakup']);
+  if (options.dynamics !== undefined && options.dynamics !== 'contact-lag-v1') throw new RangeError('Unknown split contact dynamics');
+  if (options.dynamics === undefined && [options.lag, options.release, options.breakup].some(value => value !== undefined)) {
+    throw new RangeError('lag, release and breakup require contact-lag-v1 dynamics');
+  }
   const seed = seedValue(options.seed ?? 0), width = positive(options.width ?? 2, 'width');
   const spread = finite(options.spread ?? 12, 'spread');
   if (spread < 0) throw new RangeError('spread must be nonnegative');
   const opacity = bounded(options.opacity ?? .8, 'opacity'), variance = bounded(options.variance ?? .3, 'variance');
   const spacing = positive(options.spacing ?? 2, 'spacing'), source = pathData(path);
+  if (options.dynamics === 'contact-lag-v1') return splitLaggedContacts(source, count, { ...options, seed, width, spread, opacity, variance, spacing });
   const zeroPositions = new Set(source.points.flatMap((point, i) => point.pressure === 0 && source.length > 0 ? [source.distances[i]! / source.length] : []));
   // Ordinary group sources accept at most 4096 points per stroke, including
   // explicit lifts and segment endpoints. Honor that as well as the full bundle.
@@ -217,6 +230,88 @@ export function splitBristles(path: readonly InkPoint[], count: number, options:
       });
       result.push(Object.freeze({ id: `bristle-${strand}${gap ? `-part-${part}` : ''}`, points: freezePoints(points),
         width: finite(strandWidth, 'bristle width'), opacity: clamp(strandOpacity) }));
+    });
+  }
+  if (result.reduce((sum, item) => sum + item.points.length, 0) > 100000) throw new RangeError('Split source exceeds the point budget');
+  return Object.freeze(result);
+}
+
+/** A bounded path-history approximation; contacts remain ordinary editable data. */
+function splitLaggedContacts(source: ReturnType<typeof pathData>, count: number,
+  options: SplitBristleOptions & Required<Pick<SplitBristleOptions, 'seed' | 'width' | 'spread' | 'opacity' | 'variance' | 'spacing'>>): readonly SplitBristle[] {
+  const { seed, width, spread, opacity, variance, spacing } = options;
+  const lag = finite(options.lag ?? spread * .85, 'lag');
+  if (lag < 0) throw new RangeError('lag must be nonnegative');
+  const release = bounded(options.release ?? 1, 'release'), breakup = bounded(options.breakup ?? .65, 'breakup');
+  if (source.length === 0) throw new RangeError('A split bundle needs a path with nonzero length');
+  const lifts = [...new Set(source.points.flatMap((p, i) => p.pressure === 0 ? [source.distances[i]! / source.length] : []))];
+  const liftSet = new Set(lifts);
+  const anchors = source.points.length <= 128 ? source.distances.map(d => d / source.length) : [];
+  const budget = Math.min(4080, Math.floor(99000 / count) - 24) - lifts.length - anchors.length;
+  if (budget < 2) throw new RangeError('Too many pressure-lift anchors for the split source budget');
+  const sampled = sampleStrokePath(source.points, { spacing: Math.max(spacing, source.length / budget) });
+  const total = sampled.at(-1)!.distance;
+  const at = (t: number) => {
+    const distance = Math.max(0, Math.min(total, t * total));
+    let low = 0, high = sampled.length - 1;
+    while (low < high) { const middle = (low + high) >>> 1; if (sampled[middle]!.distance < distance) low = middle + 1; else high = middle; }
+    const a = sampled[Math.max(0, low - 1)]!, b = sampled[low]!, u = b.distance === a.distance ? 1 : (distance - a.distance) / (b.distance - a.distance);
+    const nx = a.nx * (1 - u) + b.nx * u, ny = a.ny * (1 - u) + b.ny * u, magnitude = Math.hypot(nx, ny) || 1;
+    low = 0; high = source.points.length - 1;
+    while (low < high) { const middle = (low + high) >>> 1; if (source.distances[middle]! < distance) low = middle + 1; else high = middle; }
+    const previous = Math.max(0, low - 1), span = source.distances[low]! - source.distances[previous]!;
+    const fraction = span === 0 ? 1 : (distance - source.distances[previous]!) / span;
+    const pressure = liftSet.has(t) ? 0 : (source.points[previous]!.pressure ?? 1) * (1 - fraction) + (source.points[low]!.pressure ?? 1) * fraction;
+    return { x: source.points[previous]!.x * (1 - fraction) + source.points[low]!.x * fraction,
+      y: source.points[previous]!.y * (1 - fraction) + source.points[low]!.y * fraction, nx: nx / magnitude, ny: ny / magnitude, pressure };
+  };
+  const result: SplitBristle[] = [];
+  for (let strand = 0; strand < count; strand++) {
+    const random = createRandom(seed ^ Math.imul(strand + 1, 0x9e3779b1));
+    const noise = createNoise1D(seed ^ Math.imul(strand + 1, 0x51ed270b));
+    const center = strand === 0, side = strand % 2 ? -1 : 1;
+    const rank = Math.ceil(strand / 2) / Math.max(1, Math.ceil((count - 1) / 2));
+    const lateral = center ? 0 : side * spread * .5 * rank * (.8 + random() * .35);
+    const from = center ? 0 : .025 + random() * .19, to = center ? 1 : .79 + random() * .18;
+    const memory = center ? 0 : lag * (.35 + rank * .65) * (.65 + random() * .5) / total;
+    const drift = center ? 0 : (random() - .5) * spread * (.16 + variance * .34);
+    const strandWidth = width * (center ? 1 : (.24 + random() * .43) * (1 - rank * .22));
+    const strandOpacity = opacity * (center ? 1 : .27 + random() * .39);
+    const holes: { from: number; to: number }[] = [];
+    if (!center && breakup > 0) for (let gap = 0; gap < 3; gap++) {
+      const middle = .2 + gap * .2 + (random() - .5) * .11;
+      const half = (.009 + random() * .035) * breakup;
+      if (random() < breakup) holes.push({ from: Math.max(from, middle - half), to: Math.min(to, middle + half) });
+    }
+    holes.sort((a, b) => a.from - b.from);
+    const ranges: { from: number; to: number }[] = [];
+    let cursor = from;
+    for (const hole of holes) {
+      if (hole.to <= cursor || hole.from >= to) continue;
+      if (hole.from > cursor) ranges.push({ from: cursor, to: hole.from });
+      cursor = Math.max(cursor, hole.to);
+    }
+    if (cursor < to) ranges.push({ from: cursor, to });
+    ranges.forEach((range, part) => {
+      const steps = Math.max(1, Math.ceil((range.to - range.from) * (sampled.length - 1)));
+      const positions = [...new Set([...Array.from({ length: steps + 1 }, (_, i) => range.from + (range.to - range.from) * i / steps),
+        ...[...lifts, ...anchors].filter(t => t >= range.from && t <= range.to)])].sort((a, b) => a - b);
+      const points = positions.map(t => {
+        const point = at(t), history = at(Math.max(0, t - memory));
+        const mix = center ? 0 : .7;
+        const x = point.nx * (1 - mix) + history.nx * mix, y = point.ny * (1 - mix) + history.ny * mix;
+        const length = Math.hypot(x, y), nx = length > 1e-8 ? x / length : point.nx, ny = length > 1e-8 ? y / length : point.ny;
+        const u = (t - from) / (to - from), section = (t - range.from) / (range.to - range.from);
+        const gathering = center ? 0 : Math.pow(point.pressure, .7) * (1 - release + release * (.12 + .88 * ease(Math.min(1, (1 - u) / .25))));
+        const offset = (lateral + drift * (u - .35) + spread * .055 * variance * noise(t * 7.3 + 17.11)) * gathering;
+        // A gap is absent geometry and its contact ends lift before the cut.
+        const tip = center ? 1 : Math.pow(Math.max(0, Math.min(1, section / .1, (1 - section) / .16)), .6);
+        const pressure = center ? point.pressure : varyPressure(point.pressure, variance * .6,
+          { seed: seed ^ strand, at: t, wavelength: .13 }) * tip;
+        return { x: finite(point.x + nx * offset, 'bristle x'), y: finite(point.y + ny * offset, 'bristle y'), pressure };
+      });
+      result.push(Object.freeze({ id: `bristle-${strand}${ranges.length > 1 ? `-part-${part}` : ''}`,
+        points: freezePoints(points), width: finite(strandWidth, 'bristle width'), opacity: clamp(strandOpacity) }));
     });
   }
   if (result.reduce((sum, item) => sum + item.points.length, 0) > 100000) throw new RangeError('Split source exceeds the point budget');

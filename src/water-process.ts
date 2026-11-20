@@ -61,7 +61,7 @@ const GENERATOR = 'water-event-process-v1';
 const commonFields = ['kind', 'id', 'water', 'at', 'dryAfter', 'mode', 'strokes', 'edgeSoftness', 'edgeDeposit', 'edgeWidth'];
 const inkFields = new Set([...commonFields, 'concentration']);
 const waterFields = new Set([...commonFields, 'droplets']);
-const optionFields = new Set(['width', 'height', 'seed', 'background', 'ink']);
+const optionFields = new Set(['width', 'height', 'seed', 'background', 'ink', 'wetModel']);
 const dropletFields = new Set(['id', 'x', 'y', 'radius']);
 
 function fields(value: object, allowed: ReadonlySet<string>, name: string): void {
