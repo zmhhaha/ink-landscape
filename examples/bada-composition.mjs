@@ -1,7 +1,7 @@
 import { createStrokeGroupDocument } from '../dist/stroke-group-document.js';
 import { createBadaInkComposition, drawBadaInkComposition } from './bada-material.mjs';
 import { createBadaTreeGroups } from './bada-tree.mjs';
-import { createBadaRockGroups } from './bada-rocks.mjs';
+import { createBadaHangingWoodGroups } from './bada-hanging-wood.mjs';
 import { createBadaCrowGroups } from './bada-crows.mjs';
 
 export const BADA_REFERENCE = Object.freeze({
@@ -13,7 +13,7 @@ export const BADA_REFERENCE = Object.freeze({
 /** Each subject remains an ordinary, individually editable stroke group. */
 export function createBadaDocument({ width = 540, seed = 821730 } = {}) {
   const scale = width / 1381, height = Math.round(width * 2692 / 1381);
-  const groups = [...createBadaRockGroups(), ...createBadaTreeGroups(), ...createBadaCrowGroups()]
+  const groups = [...createBadaHangingWoodGroups(), ...createBadaTreeGroups(), ...createBadaCrowGroups()]
     .map(group => ({ ...group, strokes: group.strokes.map(stroke => ({ ...stroke,
       points: stroke.points.map(point => ({ ...point, x: (point.x - 73)*scale, y: (point.y-78)*scale })),
       options: { ...stroke.options, width: stroke.options.width*scale,

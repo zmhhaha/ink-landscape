@@ -4,23 +4,19 @@ import { renderInkProcess } from '../dist/ink-canvas.js';
 import { renderCanvas } from '../dist/canvas.js';
 
 // This composition deliberately uses the existing density renderer for broad
-// wood/rock deposits and pale bird bodies; contact rendering retains the bones,
+// pale wood deposits and bird bodies; contact rendering retains the outlines,
 // dry feathers, eyes, beaks and claws.
 // Independent subject bounds retain a useful grid size within the core budget.
 const specs = [
-  { id:'rock', select:g=>g.id.startsWith('bada-rock'), cell:.7 },
-  { id:'wood', select:g=>['tree/trunk','tree/broken-limbs','tree/bark','tree/wet-structure'].includes(g.id), cell:1.05 },
+  { id:'hanging-wood', select:g=>g.id.startsWith('hanging-wood/'), cell:.7 },
+  { id:'wood', select:g=>['tree/trunk','tree/broken-limbs','tree/bark'].includes(g.id), cell:1.05 },
   { id:'upper-branch', select:g=>g.id==='tree/upper-bare-branch', cell:.6 },
   { id:'stump', select:g=>g.id==='tree/lower-stump', cell:.5 },
   { id:'ground', select:g=>g.id==='ground', cell:.65 },
 ];
 function concentration(id) {
   if(id.startsWith('crow'))return .38;
-  if(id==='bada-rock-wet-core')return .38;
-  if(id==='tree/wet-structure')return .38;
-  if(id.includes('pale-planes'))return .24;
-  if(id.includes('cap-facets')||id.includes('body-facets'))return .52;
-  if(id.includes('rock'))return .45;
+  if(id.startsWith('hanging-wood/'))return .24;
   if(id==='tree/bark')return .51;
   if(id==='ground')return .4;
   return .4;
