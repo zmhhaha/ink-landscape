@@ -68,6 +68,8 @@ OpenSpec 权威记录位于现有 armbianbegin 项目 `ec663f5a-53d3-4a0e-9037-9
 
 ## 已有基础与后续任务
 
+后续技法扩展沿用 `add-ink-landscape-technique-library`。先在《枯木寒鸦图》的叉口和洞口验证枝干勾皴与木结，再检验控笔、线皴和点皴的改进，扩展丝毛、水面线组、勾花点叶与撞粉。方案及样片验收见 [笔法改进与扩展设计](technique-development-design.md)。
+
 现状基线：`d56779285588d88479e4282762e5de00ae0d271a`。
 
 - 已有工程基础：独立 GitHub 仓库与 MIT 许可、纯 TypeScript 场景核心、Canvas 笔触／铺染／两种皴擦原型、四类参数示例、16 项测试以及四组真实浏览器像素检查。

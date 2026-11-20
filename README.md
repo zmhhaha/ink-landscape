@@ -14,6 +14,10 @@
 
 已确认的目标、首版范围、验收与后续任务见 [需求说明](docs/requirements.md)，对应 OpenSpec 独立变更 `add-ink-landscape-technique-library`。
 
+下一轮优先研究枝干勾皴与木结、提按顿折和沿程耗墨，再扩展禽鸟丝毛、画水线组及花鸟设色。既有技法的源码参考、实施顺序与对照要求见 [笔法改进与扩展设计](docs/technique-development-design.md)。
+
+第一项已加入 [`createBarkDocument()`](docs/bark-document.md)：从枝干路径、局部枝径、叉口和木结控制生成普通可编辑笔组。[三组对照](examples/bark-study.html)提供主干叉口、悬垂朽木洞口与斜干换形；[整画试作](examples/bada-study.html?bark=structured)将前两处接回原画稿。当前为程序近似，视觉评价与后续控笔研究分别推进。
+
 第13–30批已补入独立研究：共18批、54组，与原十二批合计30批、90组，覆盖100项目录。[新增批次浏览页](examples/remaining-review.html)支持换形、逐项源JSON编辑、局部试改及每批三项合图导出；[完整清单与边界](docs/remaining-technique-batches.md)记录研究范围。皴水保留缺证并仅提供中性湿域探针，品字点等候选也不升级为传统预设。公开研究索引 `getTechniqueStudies(id)` 与具名实现、阅读证据、艺术验收分别保存。
 
 第13–22批（编号37–66）继续按反馈回修摩擦、散束、沉积、湿边、色层和线笔提按，见[进阶材质回修记录](docs/advanced-material-revision.md)。新增可选的[微扰工具](docs/perturbation.md)将固定种子的路径、压力和散束变化保存为普通源数据，保留逐笔编辑和重放。

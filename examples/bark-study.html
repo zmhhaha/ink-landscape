@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>枝干勾皴与木结</title>
+<link rel="stylesheet" href="./bark-study.css">
+<main>
+  <h1>枝干勾皴与木结</h1>
+  <p>比较木结、裂纹和勾线怎样服从同一干形。每组使用相同的干形、画幅和种子。</p>
+  <div class="toolbar">
+    <button id="save-png">保存对照图</button>
+    <button id="save-source">保存编辑源</button>
+    <button id="verify-replay">检查重建</button>
+    <span id="status" role="status">正在生成…</span>
+  </div>
+  <section id="gallery" aria-label="三组对照"></section>
+  <details id="editor">
+    <summary>修改枝干、木结与叉口</summary>
+    <label for="case-select">选择样片</label>
+    <select id="case-select"></select>
+    <label for="recipe-source">枝干配方 JSON</label>
+    <textarea id="recipe-source" spellcheck="false"></textarea>
+    <div class="toolbar">
+      <button id="apply-source">重绘所选样片</button>
+      <button id="restore-source">还原所选样片</button>
+      <span id="edit-status" role="status"></span>
+    </div>
+  </details>
+  <p><a href="./bada-study.html?bark=structured">查看完整画稿</a> · <a href="./index.html">返回实验索引</a></p>
+</main>
+<script type="module" src="./bark-study.mjs"></script>
+</html>

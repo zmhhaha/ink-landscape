@@ -34,5 +34,7 @@ export { createStrokeGroupDocument, compileStrokeGroupRecipe, reviseStrokeGroupD
 export type * from './stroke-group-document.js';
 export { createTreeMacro, createRockMacro, createBirdMacro } from './subject-macros.js';
 export type * from './subject-macros.js';
+export { createBarkDocument, compileBarkRecipe, reviseBarkDocument } from './bark-document.js';
+export type * from './bark-document.js';
 export { TECHNIQUE_STUDY_BATCHES, getTechniqueStudies } from './technique-studies.js';
 export type * from './technique-studies.js';
