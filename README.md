@@ -2,6 +2,8 @@
 
 可组合、可编辑的笔墨山水技法 TypeScript 库，供浏览器应用和创作 Agent 使用。几何与笔触数据独立于渲染器；初版使用 Canvas 2D，Shader 后端尚未实现，后续需通过画面对照验证其价值。
 
+[创作 Agent Skill](skills/ink-landscape/SKILL.md)按需提供笔墨、皴法、树石鸟与墨层的真实 API 用法，保留自创笔路和可编辑源；运行时由宿主供应固定版本，选择不加载 WikiSkill 时不注入这些知识。
+
 [枯木寒鸦代码临摹](examples/bada-study.html)使用现有笔组与墨层接口组织一幅完整习作，支持PNG和编辑源导出；[配方与重建说明](docs/bada-code-study.md)记录构图来源、局部修改及验证范围。
 
 [树、石、鸟复合源](docs/subject-macros.md)提供可选的 `createTreeMacro()`、`createRockMacro()`、`createBirdMacro()`，将分枝、岩骨皴染、分件鸟组合为普通可编辑笔组。调用者可提供自己的骨架、区域、方向场或部件；[复合源浏览页](examples/subject-macros.html)可保存三项合图和JSON。这些模板仍是待艺术评价的程序近似。
