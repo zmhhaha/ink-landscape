@@ -34,8 +34,9 @@ export function makeDotStudies(options = {}) {
     axis: 'center', dryness: .22, opacity: .94, ink: '#20251f', start: 0, duration: 1.6 };
   const three = dotLayout([110, 270, 430].map((x, index) => ({ id: `point-${index + 1}`, x, y: 112,
     pressure: .86, start: index * .08 })), inputs.layout);
-  const pressureControls = [{ at: 0, pressure: .12 }, { at: .27, pressure: inputs.press * .35 },
-    { at: .58, pressure: inputs.press }, { at: .8, pressure: inputs.press * .82 }, { at: 1, pressure: .08 }];
+  const pressureControls = [{ at: 0, pressure: .08 }, { at: .18, pressure: inputs.press * .12 },
+    { at: .36, pressure: inputs.press * .74 }, { at: .58, pressure: inputs.press },
+    { at: .78, pressure: inputs.press * .9 }, { at: .92, pressure: inputs.press * .34 }, { at: 1, pressure: .03 }];
   const plain = createDotDocument(three, { ...common, controls: [{ at: 0, pressure: .58 }, { at: 1, pressure: .58 }] });
   const pressed = reviseDotDocument(plain, { options: { controls: pressureControls } });
   const side = reviseDotDocument(pressed, { options: { axis: 'side' } });
@@ -44,19 +45,25 @@ export function makeDotStudies(options = {}) {
   // The direction experiment changes only rotation, including these controls.
   const directionalControls = [
     { at: 0, pressure: .08, side: .02, angle: 1.5, inkLoad: .62 },
-    { at: .28, pressure: .18, side: .08, angle: 1.5, inkLoad: .72 },
-    { at: .58, pressure: 1, side: .36, angle: 1.4, inkLoad: 1 },
-    { at: .77, pressure: 1, side: .52, angle: 1.45, inkLoad: 1 },
-    { at: .91, pressure: .7, side: .3, angle: 1.5, inkLoad: .85 },
+    { at: .22, pressure: .12, side: .05, angle: 1.5, inkLoad: .67 },
+    { at: .43, pressure: .7, side: .24, angle: 1.4, inkLoad: .91 },
+    { at: .64, pressure: 1, side: .44, angle: 1.45, inkLoad: 1 },
+    { at: .8, pressure: .94, side: .56, angle: 1.43, inkLoad: 1 },
+    { at: .93, pressure: .43, side: .22, angle: 1.5, inkLoad: .78 },
     { at: 1, pressure: .05, side: .04, angle: 1.5, inkLoad: .62 },
   ];
   const directed = angle => createDotDocument(three, { ...common, shape: 'horizontal', size: 52, controls: directionalControls, angle });
   // Unequal local groups and broad gaps are author decisions, with exactly the
   // same nine sizes/pressures retained for this position-only comparison.
-  const organized = [[110, 144], [132, 122], [148, 153], [170, 133], [279, 116], [299, 96], [321, 125], [423, 86], [452, 110]];
+  const organized = [[112, 142], [128, 136], [137, 154], [164, 144], [284, 114], [302, 106], [317, 129], [431, 90], [453, 112]];
   const angles = [-.82, -.3, .22, .64, -.65, -.12, .52, -.9, -.35];
+  // The same main/secondary collection is used even in the grid. Only the
+  // organized placements let those unequal contacts meet; no exclusion radius
+  // prevents the close members from sharing ink inside a four/three/two group.
+  const sizes = [38, 26, 21, 28, 42, 25, 29, 35, 23];
+  const loads = [.94, .62, .46, .69, .98, .58, .63, .84, .51];
   const grid = Array.from({ length: 9 }, (_, i) => ({ id: `group-${i + 1}`, x: 100 + (i % 3) * 175,
-    y: 59 + Math.floor(i / 3) * 55, pressure: .74 + (i % 3) * .06, size: 28 + (i % 3) * 3, start: i * .04 }));
+    y: 59 + Math.floor(i / 3) * 55, pressure: loads[i], size: sizes[i], start: i * .04 }));
   const spaced = grid.map((point, i) => ({ ...point, x: point.x + (organized[i][0] - point.x) * inputs.spacing,
     y: point.y + (organized[i][1] - point.y) * inputs.spacing }));
   const groupOptions = { ...common, shape: 'horizontal', dryness: .3, size: 32, controls: directionalControls };
@@ -74,7 +81,7 @@ export function makeDotStudies(options = {}) {
       limits: '横竖斜是同一程序点形的旋转对照，尚未涵盖传统点法各自的入纸、行笔、收笔差别。',
       techniqueIds: ['brush-dot'], variants: [variant('baseline', '横势 · 0°', directed(0)), variant('variable', '竖势 · 90°', directed(Math.PI / 2)), variant('combined', '斜势 · −45°', directed(-Math.PI / 4))] },
     { id: 'group', title: '09 · 群点组织', variable: '同一组九笔：等距排布 → 只改疏密位置 → 保留位置并加入方向呼应。',
-      criteria: '先看间距带来的疏密，再看同一位置上方向的呼应。每个点有稳定 ID，尺寸、压力和材质在三列中逐点一致。',
+      criteria: '同一组主副不等的九笔，先看四、三、二笔的紧疏与簇间留空，再看同一位置的方向呼应。近处允许叠墨；稳定 ID、尺寸、压力和材质在三列中逐点一致。',
       limits: '位置与呼应角均是作者给定的示例，可逐点修改；没有用随机点填满区域，也不据此宣称已实现介字点、个字点、米点等传统点法。',
       techniqueIds: ['brush-dot'], variants: [variant('baseline', '对照 · 等距九点', createDotDocument(dotLayout(grid, inputs.layout), groupOptions)), variant('variable', '变化 · 只改疏密位置', grouped), variant('combined', '组合 · 疏密 + 方向呼应', responding)] },
   ];

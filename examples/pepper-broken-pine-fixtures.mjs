@@ -1,4 +1,4 @@
-import { createVegetationDocument, createSplitVegetationUnit, transformVegetationUnit } from '../dist/index.js';
+import { createVegetationDocument, createSplitVegetationUnit, transformVegetationUnit, getNoise1D } from '../dist/index.js';
 
 export const pepperBrokenPineInputs = Object.freeze({ seed: 261131, layout: 'slope', widthScale: 1, dryness: .43, time: 8 });
 export const pepperBrokenPineSize = Object.freeze({ width: 560, height: 260, background: '#f5f2e9', ink: '#252820' });
@@ -83,14 +83,18 @@ export function makePepperBrokenPineStudies(options = {}) {
       const offset = stage === 0 ? [(j % 4 - 1.5) * 10, (Math.floor(j / 4) - 1.5) * 10] : dotOffsets[j];
       const size = stage === 2 ? [.8, 1.1, .9, 1.24, .72][(i + j) % 5] : 1;
       const angle = stage === 2 ? [-.55, .35, -.12, .68, .05][(i * 3 + j) % 5] : 0;
-      const [dx, dy] = rotate(stage === 2 ? [offset[0] * [.84, 1.07, .93, 1.16, .78, 1.04, .88, 1.13, .97][i],
-        offset[1] * [1.08, .84, .97, .78, 1.1, .91, 1.03, .85, .96][i]] : offset,
+      // A compact inner core can share ink. The sparse outer members retain
+      // their explicit offsets and the corridors between authored group roots.
+      const core = stage === 2 && j < 9 ? .53 : stage === 1 && j < 9 ? .72 : 1;
+      const [dx, dy] = rotate(stage === 2 ? [offset[0] * [.84, 1.07, .93, 1.16, .78, 1.04, .88, 1.13, .97][i] * core,
+        offset[1] * [1.08, .84, .97, .78, 1.1, .91, 1.03, .85, .96][i] * core] : offset.map(value => value * core),
       stage === 2 ? [-.18, .12, -.07, .27, -.24, .09, -.14, .21, -.03][i] : 0);
       const values = stage === 0 ? [[0, 0, 1], [0, 1.6, 1]]
         : [[0, 0, .56], [.3, .85 * size, 1], [-.25, 2.2 * size, .83], [.2, 3.1 * size, .3]];
       return stroke(`dot-${j}`, local(values, [anchor[0] + dx, anchor[1] + dy], angle),
-        stage === 2 ? [3.2, 4.1, 2.8, 4.8, 3.7, 5.1][(i + j) % 6] : 4.2,
-        .55 + i * .57 + j * .009, stage === 0 ? plain : { ...dabContact, opacity: stage === 2 ? [.89, .75, .63, .83][(i + j) % 4] : .8 });
+        stage === 2 ? [0, 3, 8].includes(j) ? 5.1 : [2.3, 3.4, 2.8, 4.2, 3.1][(i + j) % 5] : 4.2,
+        .55 + i * .57 + j * .009, stage === 0 ? plain : { ...dabContact,
+          opacity: stage === 2 ? [0, 3, 8].includes(j) ? .94 : [.77, .55, .43, .68][(i + j) % 4] : .8 });
     }) };
   };
   const broken = (i, stage) => {
@@ -118,7 +122,11 @@ export function makePepperBrokenPineStudies(options = {}) {
           points[points.length - 1] = { ...last, x: before.x + (last.x - before.x) * portion,
             y: before.y + (last.y - before.y) * portion, pressure: last.pressure * .8 };
         }
-        return { ...member, points, options: { ...member.options, width: member.options.width * inputs.widthScale } };
+        const weight = stage === 2 ? [1.08, .82, .9, .64][b] : 1;
+        return { ...member, points, options: { ...member.options,
+          width: member.options.width * inputs.widthScale * weight,
+          ...(stage === 2 ? { controls: member.options.controls.map(control => ({ ...control,
+            inkLoad: b === 0 ? .98 : [.8, .72, .86][(i + j + b) % 3] })) } : {}) } };
       });
     }).flat();
     return { id: `cluster-${i}`, strokes };
@@ -126,18 +134,22 @@ export function makePepperBrokenPineStudies(options = {}) {
   const pine = (i, stage) => {
     const anchor = anchorFor(i, stage), count = stage === 0 ? 12 : stage === 1 ? 10 : needleCounts[i];
     return { id: `cluster-${i}`, strokes: Array.from({ length: count }, (_, j) => {
+      const main = j === Math.floor(count * .48), support = j === Math.floor(count * .48) + 1;
       const angle = stage === 0 ? j * Math.PI / 6 : stage === 1 ? groupAngles[i] - 1.04 + j * .22
         : groupAngles[i] + needleOffsets[j] * [.72, 1.12, .84, .95, 1.08, .8, .98, .7, 1.02][i]
           + [0, .035, -.065, .025, -.02][j % 5];
-      const length = stage === 0 ? 29 : stage === 1 ? 31 : [34, 25, 39, 28, 36, 22, 41][(i + j) % 7] * lengths[i];
+      const length = stage === 0 ? 29 : stage === 1 ? main ? 34 : 29
+        : [34, 25, 39, 28, 36, 22, 41][(i + j) % 7] * lengths[i] * (main ? 1.1 : support ? 1 : .89);
       const base = stage === 2 && j > 0 ? [anchor[0] + ((j % 3) - 1) * 1.8, anchor[1] + (j % 2) * 1.5] : anchor;
       const values = stage === 0 ? [[0, 0, 1], [length, 0, 1]]
-        : [[0, 0, .64], [length * .28, stage === 2 ? ((i + j) % 3 - 1) * .65 : 0, .96],
-          [length * .7, stage === 2 ? [.6, -.3, .9, .2][(i + j) % 4] : 0, .58], [length, 0, .06]];
+        : [[0, 0, main ? .7 : .5], [length * .28, stage === 2 ? ((i + j) % 3 - 1) * .65 : 0, main ? 1 : .84],
+          [length * .7, stage === 2 ? [.6, -.3, .9, .2][(i + j) % 4] : 0, main ? .64 : .48], [length, 0, .035]];
       return stroke(`needle-${j}`, local(values, base, angle),
-        stage === 2 ? [1.5, 2, 1.8, 2.4, 1.65][(i + j) % 5] : 1.9,
+        stage === 0 ? 1.9 : main ? 2.45 : support ? 1.95 : [1.05, 1.4, 1.2, 1.6, 1.32][(i + j) % 5],
         .55 + i * .57 + j * .026, stage === 0 ? plain : { ...needleContact,
-          opacity: stage === 2 ? [.86, .68, .77, .57][(i + j) % 4] : .8 });
+          controls: needleContact.controls.map(control => ({ ...control,
+            inkLoad: main ? .98 : .74 + getNoise1D(i * .83 + j * .61 + control.at, 261133) * .08 })),
+          opacity: main ? .9 : support ? .77 : [.62, .47, .57, .4][(i + j) % 4] });
     }) };
   };
   const units = (make, stage) => anchors.map((_, i) => make(i, stage));

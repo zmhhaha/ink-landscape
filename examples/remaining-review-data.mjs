@@ -12,7 +12,8 @@ export const remainingBatches = [
 export const makeRemainingBatch = (batch, layout = batch.layout) => batch.make({ layout });
 export function remainingRecord(batch, layout, studies) {
   return { version: 1, study: remainingStage.id, batch: batch.number, layout,
-    ...(batch.number <= 22 ? { sourceRevision: 'advanced-material-revision-20261120' } : {}),
+    ...(batch.number <= 20 ? { sourceRevision: 'natural-hierarchy-revision-20261120' }
+      : batch.number <= 22 ? { sourceRevision: 'advanced-material-revision-20261120' } : {}),
     render: { backend: remainingStage.backend, time: 8, paperTexture: 0, cellSize: 1 },
     documents: studies.flatMap(study => study.variants.map(variant => ({ study: study.id,
       variant: variant.id, techniqueIds: study.techniqueIds, limits: study.limits, document: variant.document }))) };

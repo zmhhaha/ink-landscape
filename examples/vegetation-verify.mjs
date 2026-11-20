@@ -29,6 +29,15 @@ const frontBackOrder = document => {
   const last = document.recipe.units.findLastIndex(unit => unit.role === 'structure');
   return first > 0 && last < document.recipe.units.length - 1;
 };
+// Projection tone belongs to the loaded leaf body. Root accents can insert
+// earlier controls, so an array index cannot identify this contact phase.
+const bodyInkLoad = stroke => {
+  const body = (stroke.options?.controls ?? []).filter(control => control.at >= .2 && control.at <= .8
+    && Number.isFinite(control.pressure));
+  if (!body.length) return undefined;
+  const peak = body.reduce((selected, control) => control.pressure > selected.pressure ? control : selected);
+  return peak.inkLoad;
+};
 
 /** Checks authored objects, reproducibility and editing; no artistic verdict. */
 export async function verifyVegetationStudies({ seed = vegetationInputs.seed } = {}) {
@@ -75,7 +84,9 @@ export async function verifyVegetationStudies({ seed = vegetationInputs.seed } =
           variedSourceOpacity: new Set(marks(c).map(unit => unit.strokes[0].options.opacity)).size > 2,
           neutralContactExplicitOnlyInCounterexample: marks(a).every(unit => Array.isArray(unit.strokes[0].options.controls))
             && marks(b).every(unit => unit.strokes[0].options.controls === undefined) });
-        if (study.id === 'leaves') organization.push({ ...common,
+        if (study.id === 'leaves') {
+          const bodyLoads = marks(c).map(unit => bodyInkLoad(unit.strokes[0]));
+          organization.push({ ...common,
           explicitLeafCounts: marks(a).length === 20 && marks(b).length === 20 && marks(c).length === 20,
           attachedSourcePathsReplaceGrid: !same(paths(a), paths(b)),
           sameBasesAfterPressChange: marks(b).every((unit, i) => same(unit.strokes[0].points[0], { ...marks(c)[i].strokes[0].points[0], pressure: 1 })),
@@ -84,9 +95,11 @@ export async function verifyVegetationStudies({ seed = vegetationInputs.seed } =
           neutralContactReplaced: marks(b).every(unit => Array.isArray(unit.strokes[0].options.controls))
             && marks(c).every(unit => unit.strokes[0].options.controls.some(control => control.side >= .6)),
           projectedWidthsAndPigmentVary: new Set(marks(c).map(unit => unit.strokes[0].options.width)).size >= 8
-            && new Set(marks(c).map(unit => unit.strokes[0].options.controls[1].inkLoad)).size === 3,
+            && bodyLoads.every(load => Number.isFinite(load) && load >= 0 && load <= 1)
+            && new Set(bodyLoads).size === 3 && Math.max(...bodyLoads) - Math.min(...bodyLoads) >= .12,
           rearLeavesBeforeBranchesFrontLeavesAfter: frontBackOrder(c),
           authoredLightEnds: marks(c).every(unit => unit.strokes[0].points.at(-1).pressure < unit.strokes[0].points[0].pressure) });
+        }
         if (study.id === 'outline') organization.push({ ...common,
           allLeavesKeepTwoSides: [a, b, c].every(document => marks(document).length === 20 && marks(document).every(unit => unit.strokes.length === 2)),
           pairedBasesAndTips: marks(b).every(unit => same(unit.strokes[0].points[0], unit.strokes[1].points[0])

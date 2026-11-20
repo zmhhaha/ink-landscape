@@ -71,6 +71,7 @@ export function revisionDetail(batch, study, variant) {
 
 export function revisionRecord(batch, layout, studies) {
   return { version: 1, study: revisionStage.id, batch: batch.number, layout,
+    sourceRevision: 'natural-hierarchy-revision-20261120',
     render: { backend: revisionStage.backend, paperTexture: 0, time: 8, cellSize: 1 },
     documents: studies.flatMap(study => study.variants.map(variant => ({
       study: study.id, variant: variant.id, document: variant.document,

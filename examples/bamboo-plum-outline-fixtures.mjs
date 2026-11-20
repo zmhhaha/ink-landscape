@@ -1,4 +1,4 @@
-import { createVegetationDocument, transformVegetationUnit } from '../dist/index.js';
+import { createVegetationDocument, transformVegetationUnit, getNoise1D } from '../dist/index.js';
 
 export const bambooPlumOutlineInputs = Object.freeze({ seed: 261134, layout: 'slope', widthScale: 1, dryness: .4, time: 8 });
 export const bambooPlumOutlineSize = Object.freeze({ width: 560, height: 260, background: '#f5f2e9', ink: '#252820' });
@@ -24,8 +24,12 @@ const plumContact = { ...plain, axis: 'side', smoothing: 'catmull-rom', controls
   { at: 0, pressure: .35, side: .12, angle: 1.4 }, { at: .34, pressure: 1, side: .46, angle: 1.5 },
   { at: .74, pressure: .76, side: .24, angle: 1.62 }, { at: 1, pressure: .05, side: .03, angle: 1.5 }] };
 const outlineContact = { ...plain, smoothing: 'catmull-rom', controls: [
-  { at: 0, pressure: .6, side: .02, angle: 1.5 }, { at: .35, pressure: .9, side: .06, angle: 1.42 },
-  { at: .7, pressure: .72, side: .02, angle: 1.6 }, { at: 1, pressure: .28, side: .02, angle: 1.5 }] };
+  { at: 0, pressure: .72, side: .02, angle: 1.5, inkLoad: .92 },
+  { at: .055, pressure: .9, side: .03, angle: 1.47, inkLoad: 1 },
+  { at: .23, pressure: .4, side: .04, angle: 1.42, inkLoad: .84 },
+  { at: .55, pressure: .51, side: .03, angle: 1.54, inkLoad: .9 },
+  { at: .82, pressure: .29, side: .02, angle: 1.6, inkLoad: .75 },
+  { at: 1, pressure: .035, side: .01, angle: 1.5, inkLoad: .59 }] };
 
 // Original authored guides. Bamboo has a separate two-culm scaffold; the leaf
 // clusters and the outlined objects use the branching scaffold below.
@@ -85,12 +89,21 @@ export function makeBambooPlumOutlineStudies(options = {}) {
     const twig = stroke('twig', local([[0, 0, .65], [6, -2, .55], [13, -4, .12]], anchor, angle, scale), 1.8, start, { ...plain, smoothing: 'catmull-rom', opacity: .7 });
     return { id: `cluster-${i}`, strokes: [twig, ...bambooVectors.slice(0, count).map(([ox, oy, originalDx, originalDy], j) => {
       const [vx, vy] = rotate([originalDx, originalDy], stage === 2 ? [0, .09, -.07, .04, -.11][(i + j) % 5] : 0);
-      const stretch = stage === 2 ? [.94, 1.06, .92, 1.02][(i + j) % 4] : 1, dx = vx * stretch, dy = vy * stretch;
+      const face = stage === 2 ? [1, .46, .73, 1, .56, .84][(i + j) % 6] : 1;
+      const stretch = stage === 2 ? [.94, 1.06, .92, 1.02][(i + j) % 4] * (face < .6 ? .96 : 1) : 1;
+      const dx = vx * stretch, dy = vy * stretch;
+      const curl = stage === 2 ? getNoise1D(i * .77 + j * 1.31, 261134) * .028 : 0;
       const values = stage === 0 ? [[ox, oy, 1], [ox + dx * .5, oy + dy * .5, 1], [ox + dx, oy + dy, 1]]
-        : [[ox, oy, .3], [ox + dx * .22 - 1, oy + dy * .25, .95], [ox + dx * .6 + 1.4, oy + dy * .62, .68], [ox + dx, oy + dy, .03]];
+        : [[ox, oy, .3], [ox + dx * .22 - 1 - dy * curl, oy + dy * .25 + dx * curl, .95],
+          [ox + dx * .6 + 1.4 - dy * curl * 1.3, oy + dy * .62 + dx * curl * 1.3, .68], [ox + dx, oy + dy, .03]];
+      const darkRoot = stage === 2 && ((i === 1 && j === 0) || (i === 4 && j === 2) || (i === 7 && j === 1));
+      const controls = leafContact.controls.map(control => ({ ...control, inkLoad: face < .6 ? .8 : face < .9 ? .94 : 1 }));
+      controls.splice(1, 0, { at: .075, pressure: darkRoot ? .97 : .52, side: .2, angle: 1.43,
+        inkLoad: darkRoot ? 1 : face < .6 ? .76 : .87 });
       return stroke(`leaf-${j}`, local(values, anchor, angle, stage === 0 ? .8 : scale),
-        stage === 2 ? [13.5, 11.8, 15, 10.7, 12.4, 14.4][(i + j) % 6] : 13,
-        start + .05 + j * .07, stage === 0 ? plain : { ...leafContact, opacity: stage === 2 ? [.87, .68, .79, .58][(i + j) % 4] : .8 });
+        stage === 2 ? [13.5, 11.8, 15, 10.7, 12.4, 14.4][(i + j) % 6] * face : 13,
+        start + .05 + j * .07, stage === 0 ? plain : { ...leafContact, controls,
+          opacity: stage === 2 ? [.87, .68, .79, .58][(i + j) % 4] * (face < .6 ? .84 : 1) : .8 });
     })] };
   };
   const plum = (i, stage) => {
@@ -98,14 +111,19 @@ export function makeBambooPlumOutlineStudies(options = {}) {
     return { id: `cluster-${i}`, strokes: Array.from({ length: count }, (_, j) => {
       const angle = stage === 0 ? -Math.PI / 2 + j * Math.PI * 2 / 5
         : plumAngles[j] + (stage === 2 ? groupTurns[i] + [0, .16, -.08, .11, -.14][(i + j) % 5] : 0);
-      const length = stage === 0 ? 16 : stage === 1 ? [16, 19, 14, 18, 15][j] : [21, 16, 18, 13, 20, 15, 17][(i + j) % 7] * scales[i];
+      const principal = j === 0;
+      const length = stage === 0 ? 16 : stage === 1 ? [20, 17, 13, 16, 14][j]
+        : (principal ? 22 : [13, 18, 12.5, 15, 12, 14.5][(i + j) % 6]) * scales[i];
       const base = j === 0 ? anchor : [anchor[0] + (stage === 0 ? 0 : [1.4, -1.8, 2.2, -.8][j % 4]), anchor[1] + (stage === 0 ? 0 : [1.2, -.7, 1.5][j % 3])];
       const values = stage === 0 ? [[0, 0, 1], [length * .55, 0, 1], [length, 0, 1]]
         : [[0, 0, .32], [length * .31, [1.1, -.9, .5][(i + j) % 3], .94],
           [length * .7, [.35, -.6, 1.2, -.2][(i * 2 + j) % 4], .65], [length, 0, .05]];
       return stroke(`leaf-${j}`, local(values, base, angle),
-        stage === 2 ? [10.1, 8.8, 11.4, 9.2, 12][(i + j) % 5] : 10.5,
-        .55 + i * .57 + j * .055, stage === 0 ? plain : { ...plumContact, opacity: stage === 2 ? [.88, .7, .8, .59][(i + j) % 4] : .8 });
+        stage === 2 ? (principal ? 12.4 : [8.1, 6.8, 9.4, 7.2, 8.8][(i + j) % 5]) : 10.5,
+        .55 + i * .57 + j * .055, stage === 0 ? plain : { ...plumContact,
+          controls: plumContact.controls.map(control => ({ ...control,
+            inkLoad: principal ? .98 : [.83, .72, .9][(i + j) % 3] })),
+          opacity: stage === 2 ? principal ? .92 : [.76, .6, .68, .51][(i + j) % 4] : .8 });
     }) };
   };
   const outline = (i, stage) => {
@@ -128,7 +146,10 @@ export function makeBambooPlumOutlineStudies(options = {}) {
     ];
     return { id: `cluster-${i}`, strokes: source.map(([id, values], j) => stroke(id, shape(values),
       stage === 2 ? [2.2, 1.8, 2.4, 1.7, 2.5, 1.9][(i + j) % 6] : 2,
-      .55 + i * .57 + j * .055, stage === 0 ? plain : { ...outlineContact, opacity: stage === 2 ? [.85, .67, .78, .6][(i + j) % 4] : .78 })) };
+      .55 + i * .57 + j * .055, stage === 0 ? plain : { ...outlineContact,
+        controls: outlineContact.controls.map(control => ({ ...control,
+          pressure: control.pressure * (.95 + getNoise1D(i * .73 + j * 1.17 + control.at * 2.7, 261136) * .045) })),
+        opacity: stage === 2 ? [.85, .67, .78, .6][(i + j) % 4] : .78 })) };
   };
   const units = make => stage => Array.from({ length: 9 }, (_, i) => make(i, stage));
   const bambooUnits = units(bamboo), plumUnits = units(plum), outlineUnits = units(outline);

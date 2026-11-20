@@ -1,5 +1,5 @@
 import { createInkProcessDocument, createWaterProcessDocument, createStrokeGroupDocument,
-  createNoise1D, jitterPath, varyPressure, splitBristles } from '../dist/index.js';
+  createNoise1D, getNoise2D, jitterPath, varyPressure, splitBristles } from '../dist/index.js';
 
 // These are authored comparisons, not inferred reconstructions of named techniques.
 // Every material irregularity is seeded; the saved documents retain editable paths.
@@ -14,7 +14,9 @@ function random(seed) {
   let n = seed >>> 0;
   return () => { n = (n + 0x6d2b79f5) >>> 0; let t = Math.imul(n ^ n >>> 15, n | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
-function context({ seed = 261120, layout = 'slope' } = {}) {
+const boundedGaussian = (rng, limit = 2) => Math.max(-limit, Math.min(limit,
+  Math.sqrt(-2 * Math.log(Math.max(1e-9, rng()))) * Math.cos(2 * Math.PI * rng())));
+function context({ seed = 261120, layout = 'slope', compactClips = true } = {}) {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new RangeError('seed must be an unsigned 32-bit integer');
   if (!LAYOUTS.includes(layout)) throw new RangeError('Unknown remaining-ink layout');
   const xy = ([x, y]) => {
@@ -31,14 +33,14 @@ function context({ seed = 261120, layout = 'slope' } = {}) {
     strokes: strokes.map(source => { const { id: strokeId, seed: ignoredSeed, ...options } = source.options;
       return { id: strokeId, points: source.points, options }; }) });
   const options = { ...SIZE, seed };
-  return { seed, layout, xy, stroke, group,
+  return { seed, layout, compactClips, xy, stroke, group,
     ink: layers => createInkProcessDocument(layers, options),
     water: events => createWaterProcessDocument(events, options),
     groups: groups => createStrokeGroupDocument(groups, options),
   };
 }
-const layer = (id, strokes, concentration = .4, at = 0, water = .4, dryAfter = 1, mode = 'glaze', edgeSoftness) =>
-  ({ id, strokes, concentration, at, water, dryAfter, mode, ...(edgeSoftness === undefined ? {} : { edgeSoftness }) });
+const layer = (id, strokes, concentration = .4, at = 0, water = .4, dryAfter = 1, mode = 'glaze', edgeSoftness, edge) =>
+  ({ id, strokes, concentration, at, water, dryAfter, mode, ...(edgeSoftness === undefined ? {} : { edgeSoftness }), ...(edge ?? {}) });
 const inkEvent = (...args) => ({ kind: 'ink', ...layer(...args) });
 const waterEvent = (id, strokes, at, water = .8, dryAfter = 1.2) =>
   ({ kind: 'water', id, strokes, at, water, dryAfter, mode: 'wet-mix' });
@@ -72,6 +74,29 @@ function organicBoundary(polygon, seed, amplitude = 3.4) {
     const offset = amplitude * (.64 * coarse(distance / 27) + .28 * fine(distance / 8.7) + .13 * fine(distance / 2.8 + 47));
     return [p[0] - dy / len * offset, p[1] + dx / len * offset];
   });
+}
+function clipToContact(polygon, points, width) {
+  const margin = width * .8 + 8;
+  const minX = Math.min(...points.map(p => p.x)) - margin, maxX = Math.max(...points.map(p => p.x)) + margin;
+  const minY = Math.min(...points.map(p => p.y)) - margin, maxY = Math.max(...points.map(p => p.y)) + margin;
+  let clipped = polygon.map(p => ({ x: p.x, y: p.y }));
+  // Clip an arbitrary closed boundary against a convex contact bounding box.
+  // New connectors lie outside this stroke's finite footprint. Even-odd fill
+  // retains separate pieces of a concave intersection without a convex hull.
+  for (const [axis, bound, keepGreater] of [['x', minX, true], ['x', maxX, false], ['y', minY, true], ['y', maxY, false]]) {
+    const input = clipped; clipped = [];
+    if (!input.length) break;
+    const inside = p => keepGreater ? p[axis] >= bound : p[axis] <= bound;
+    for (let i = 0; i < input.length; i++) {
+      const a = input[(i + input.length - 1) % input.length], b = input[i], ai = inside(a), bi = inside(b);
+      if (ai !== bi) {
+        const t = (bound - a[axis]) / (b[axis] - a[axis]);
+        clipped.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      }
+      if (bi) clipped.push({ x: b.x, y: b.y });
+    }
+  }
+  return clipped;
 }
 function regionRows(c, id, polygon, { width = 24, dryness = .12, opacity = .75, ink, clip = polygon, organic = false, densityScale = 1 } = {}) {
   const marks = [], rng = random(c.seed ^ hash(id));
@@ -118,9 +143,14 @@ function regionRows(c, id, polygon, { width = 24, dryness = .12, opacity = .75, 
       * (.83 + .18 * material(x / 71 + material(y / 53) * .8) + .06 * material(y / 19 + x / 41))
       : (.68 + .32 * (y - minY) / Math.max(1, maxY - minY)) * (.86 + rng() * .28);
     const localWidth = organic ? Math.min(contactWidth * (.86 + rng() * .42), distance * 2.3 + contactWidth * .4) : contactWidth * (.94 + rng() * .48);
-    marks.push(c.stroke(`${id}-contact-${k}`, [[x - dx, y - dy, pressure], [x + dx, y + dy, pressure]],
+    const source = c.stroke(`${id}-contact-${k}`, [[x - dx, y - dy, pressure], [x + dx, y + dy, pressure]],
       localWidth, dryness * .35, opacity * densityScale * (organic ? .095 : .087) * Math.max(.01, load) * (organic ? 1 : Math.max(.025, edge)),
-      { axis: 'center', smoothing: 'linear', clip, ...(ink ? { ink } : {}) }));
+      { axis: 'center', smoothing: 'linear', clip, ...(ink ? { ink } : {}) });
+    if (organic && c.compactClips) {
+      const local = clipToContact(source.options.clip, source.points, localWidth);
+      if (local.length >= 3) source.options.clip = local;
+    }
+    marks.push(source);
   }
   return marks;
 }
@@ -200,13 +230,23 @@ function batch16(options) {
     c.stroke('retained-pale-b', [[260, 165, .1], [315, 181, .88], [366, 197, .2]], 34, .19, .76, { axis: 'side' })];
   const waterAlong = [c.stroke('adjacent-clear-water', [[154, 196, .3], [225, 205, .85], [303, 199, .7], [373, 212, .2]], 26, .08, .9, { axis: 'side' })];
   const depositRng = random(c.seed ^ hash('retained-deposit-grains'));
-  const deposits = [[195, 169, 12], [223, 191, 9], [308, 162, 14], [348, 193, 10], [404, 204, 11]].flatMap(([x, y, count], a) =>
-    Array.from({ length: count }, (_, i) => {
-      const angle = depositRng() * Math.PI * 2, radius = Math.sqrt(depositRng()) * (a % 2 ? 13 : 17);
-      const px = x + Math.cos(angle) * radius, py = y + Math.sin(angle) * radius * .45, size = .65 + Math.pow(depositRng(), 1.8) * 1.7;
-      return c.stroke(`retained-grain-${a}-${i}`, [[px, py, .92], [px + .16 + depositRng() * .35, py + (depositRng() - .5) * .4, .92]], size, .04, .91,
-        { axis: 'center', smoothing: 'linear' });
-    }));
+  const deposits = [[195, 169, 14, 4], [223, 191, 8, 3], [308, 162, 16, 5], [348, 193, 9, 3], [404, 204, 12, 4]].flatMap(([x, y, coreCount, tailCount], a) => {
+    const occupied = [];
+    return Array.from({ length: coreCount + tailCount }, (_, i) => {
+      const tail = i >= coreCount;
+      let px, py;
+      for (let attempt = 0; attempt < 48; attempt++) {
+        px = x + (tail ? 8 + depositRng() * 13 : 0) + boundedGaussian(depositRng) * (tail ? 5 : 4.6);
+        py = y + (tail ? 3.5 : 0) + boundedGaussian(depositRng) * (tail ? 4.3 : 2.9);
+        if (occupied.every(p => Math.hypot(px - p[0], py - p[1]) >= 1.35)) break;
+      }
+      occupied.push([px, py]);
+      const size = tail ? 1.15 + depositRng() * 1.25 : i % 4 === 0 ? 3.1 + depositRng() * 1.15 : 1.6 + depositRng() * 1.3;
+      const dx = .35 + depositRng() * size * .36, dy = (depositRng() - .5) * size * .42;
+      return c.stroke(`retained-grain-${a}-${tail ? 'tail' : 'core'}-${i}`, [[px, py, .93], [px + dx * .45, py + dy - .18, 1], [px + dx, py + dy, .91]],
+        size, .09 + depositRng() * .07, .88 + .1 * (.5 + .5 * getNoise2D(px / 5, py / 5, c.seed ^ a)), { axis: 'center', smoothing: 'linear' });
+    });
+  });
   const mass = regionRows(c, 'initial-ink-mass', [[89, 192], [145, 92], [213, 89], [280, 136], [342, 113], [432, 180], [471, 223], [127, 225]], { width: 38, opacity: .83, dryness: .18, organic: true, densityScale: 1.8 });
   const secondMass = [c.stroke('directional-mass-a', [[183, 202, .1], [210, 131, .88], [265, 131, .8], [324, 196, .1]], 63, .12, .9, { axis: 'side' }),
     c.stroke('directional-mass-b', [[331, 202, .15], [367, 155, .85], [416, 181, .9], [455, 215, .1]], 42, .2, .88, { axis: 'side' })];
@@ -219,7 +259,7 @@ function batch16(options) {
         variant('focal', '组织 · 湿底后焦笔点醒', c.ink([layer('wet-base', wash, .16, 0, .8), layer('structure', structure, .62, 2.3, .08), layer('dry-focal', grain, .94, 4.7, .03)])),
       ]),
     study('aged', '47 · 宿墨 · 材料外观研究', ['ink-aged'], '均匀水墨 → 浓痕、淡水痕与微粒沉积 → 分区点醒。',
-      '比较浓墨保留、淡墨痕、邻接水迹及局部可编辑高浓微粒；微粒聚在部分浓痕与水迹邻缘，避免全幅颗粒贴图。',
+      '比较浓墨保留、淡墨痕、邻接水迹及局部可编辑高浓微粒；较粗粒聚成密核，小粒疏尾贴着部分浓痕与水迹邻缘，避免全幅颗粒贴图。',
       '新增的高浓微粒是普通可编辑墨笔来源，不是留置、脱胶、储存天数或真实沉淀化学；仅研究部分支持的观察线索，不用纸张泛黄冒充宿墨。', [
         variant('uniform', '对照 · 均一湿墨', c.ink([layer('uniform-load', wash, .4, 0, .75)])),
         variant('material', '机制 · 浓痕 / 淡痕 / 清水 / 微粒', c.water([inkEvent('retained-dark', fragments, .88, 0, .25, 2), inkEvent('retained-pale', paleTraces, .17, .5, .85, 2), waterEvent('adjacent-water', waterAlong, 1.2, .65), inkEvent('retained-deposit-grains', deposits, .98, 3.2, .02, .1)])),
@@ -244,6 +284,29 @@ function batch17(options) {
   const leftClip = [[-120, -120], [213, -120], [167, 59], [146, 83], [112, 121], [90, 166], [81, 204], [49, 290], [-120, 350]];
   const rightClip = [[247, -120], [700, -120], [700, 350], [487, 350], [490, 218], [460, 181], [388, 147], [338, 102], [279, 116]];
   const around = [...regionRows(c, 'background-left', backgroundLeft, { width: 34, opacity: .88, clip: leftClip, organic: true, densityScale: 1.8 }), ...regionRows(c, 'background-right', backgroundRight, { width: 37, opacity: .78, clip: rightClip, organic: true, densityScale: 1.8 })];
+  // A few authored marks retain touch, drag and interruption at selected edges.
+  // They are separate sources, not a thresholded contour around every wash.
+  const localDryTouches = [
+    c.stroke('local-edge-dry-shoulder', [[216, 112, .18], [222, 126, .9], [239, 146, .22]], 4.8, .68, .74, { axis: 'side' }),
+    c.stroke('local-edge-dry-ledge', [[280, 143, .1], [296, 148, .84], [315, 141, .12]], 3.2, .61, .64, { axis: 'side' }),
+    c.stroke('local-edge-dry-lower', [[363, 175, .16], [378, 181, .79], [400, 196, .13]], 5.5, .72, .67, { axis: 'side' }),
+  ];
+  const localWetTouches = [
+    c.stroke('local-edge-wet-shoulder', [[220, 116, .2], [228, 128, .86], [239, 138, .27]], 11.5, .18, .61, { axis: 'side' }),
+    c.stroke('local-edge-wet-lower', [[363, 179, .19], [380, 188, .83], [391, 196, .24]], 9.2, .23, .66, { axis: 'side' }),
+  ];
+  const outerDryTouches = [
+    c.stroke('outer-edge-dry-left-upper', [[131, 85, .15], [126, 94, .82], [121, 102, .13]], 3.4, .66, .68, { axis: 'side' }),
+    c.stroke('outer-edge-dry-left-lower', [[102, 130, .15], [98, 141, .83], [93, 153, .12]], 4.1, .71, .6, { axis: 'side' }),
+    c.stroke('outer-edge-dry-right-upper', [[350, 103, .13], [368, 117, .88], [381, 130, .2]], 5.1, .62, .64, { axis: 'side' }),
+    c.stroke('outer-edge-dry-right-lower', [[416, 148, .15], [432, 156, .85], [448, 163, .15]], 3.7, .69, .62, { axis: 'side' }),
+  ];
+  const outerWetTouches = [
+    c.stroke('outer-edge-wet-left', [[132, 78, .16], [127, 88, .87], [123, 96, .22]], 10.4, .19, .57, { axis: 'side' }),
+    c.stroke('outer-edge-wet-right', [[364, 104, .19], [377, 115, .88], [390, 127, .17]], 12.5, .22, .58, { axis: 'side' }),
+  ];
+  const localEdgeLayers = () => [layer('local-wet-touches', localWetTouches, .19, 2.4, .52, .6), layer('local-dry-touches', localDryTouches, .48, 3.1, .04, .2)];
+  const outerEdgeLayers = at => [layer('outer-wet-touches', outerWetTouches, .16, at, .48, .6), layer('outer-dry-touches', outerDryTouches, .39, at + .6, .04, .2)];
   const flowers = (id, centers, outlined = false) => centers.flatMap(([x, y, scale], index) => {
     const rng = random(c.seed ^ hash(`${id}-petal-${index}`));
     return [-2.63, -1.53, -.21, .95, 2.13].flatMap((a, k) => {
@@ -281,18 +344,18 @@ function batch17(options) {
   const outlinePetal = c.stroke('independent-petal-outline', [[212, 122, .8], [213, 91, .8], [239, 71, .8], [266, 91, .8], [280, 65, .8], [313, 86, .8], [309, 119, .8], [333, 128, .8], [310, 162, .8], [273, 162, .8], [249, 179, .8], [216, 151, .8], [212, 122, .8]], 2.2, .3, .9);
   return [
     study('rendering', '49 · 渲染', ['ink-rendering'], '结构上全覆均灰 → 皴擦处局部略敷 → 局部与外围分工。',
-      '染区须与已有皴擦和体面相连，线条在薄染后仍可读。第三列另外引入外围染区。',
+      '染区须与已有皴擦和体面相连，线条在薄染后仍可读；局部保留少量短湿扫、枯擦和断续内缘积墨，第三列另外引入外围染区。',
       '采用故宫词条的具体渲/染区分；不是所有时代的唯一术语标准。区域笔路与湿态交换只提供视觉近似。', [
         variant('all-over', '对照 · 整体平均铺灰', c.ink([layer('structure', [...structure, ...texture], .57, 0, .06, .2), layer('blanket', regionRows(c, 'blanket', ROCK, { organic: true, densityScale: 1.8 }), .27, 1.5, .7, 1, 'glaze', .95)])),
-        variant('local', '机制 · 皴擦处略敷', c.ink([layer('structure', [...structure, ...texture], .62, 0, .05, .2), layer('local-rendering', local, .2, 1.5, .75, 1, 'glaze', .95)])),
-        variant('organized', '组织 · 局部 / 外围分别染', c.ink([layer('structure', [...structure, ...texture], .63, 0, .05, .2), layer('local-rendering', local, .23, 1.5, .73, 1, 'glaze', .95), layer('outside-rendering', around, .13, 3.4, .65, 1, 'glaze', .94)])),
+        variant('local', '机制 · 皴擦处略敷', c.ink([layer('structure', [...structure, ...texture], .62, 0, .05, .2), layer('local-rendering', local, .2, 1.5, .75, 1, 'glaze', .95, { edgeDeposit: .46, edgeWidth: .32 }), ...localEdgeLayers()])),
+        variant('organized', '组织 · 局部 / 外围分别染', c.ink([layer('structure', [...structure, ...texture], .63, 0, .05, .2), layer('local-rendering', local, .23, 1.5, .73, 1, 'glaze', .95, { edgeDeposit: .46, edgeWidth: .32 }), ...localEdgeLayers(), layer('outside-rendering', around, .13, 3.4, .65, 1, 'glaze', .94, { edgeDeposit: .38, edgeWidth: .28 }), ...outerEdgeLayers(4.1)])),
       ]),
     study('background-wash', '50 · 烘染', ['ink-background-wash'], '主体上铺灰 → 主体周围染 → 远染 / 雪白 / 近景。',
-      '同一山体保留纸白，背景与明亮主体相邻，第三列用前后浓淡组织空间。',
+      '同一山体保留纸白，背景与明亮主体相邻；外围局部湿扫与短枯触留下受纸边痕，第三列用前后浓淡组织空间。',
       '背景染区由作者避开主体，不用白色覆盖或擦除；馆藏雪景支持这种衬托关系，不代表一切云雾配方。', [
         variant('on-subject', '对照 · 灰色落在主体上', c.ink([layer('subject-gray', regionRows(c, 'subject', ROCK, { organic: true, densityScale: 1.8 }), .27, 0, .65, 1, 'glaze', .95), layer('structure', structure, .58, 2, .04)])),
-        variant('around', '机制 · 外围染 / 留主体白', c.ink([layer('background-wash', around, .24, 0, .72, 1, 'glaze', .94), layer('structure', structure, .58, 2, .04)])),
-        variant('organized', '组织 · 远染留白 / 近景重笔', c.ink([layer('background-wash', around, .23, 0, .72, 1, 'glaze', .94), layer('snow-structure', structure.slice(0, 3), .45, 2, .05), layer('foreground', [c.stroke('foreground-bank', [[65, 225, .1], [152, 212, .82], [222, 226, .7], [326, 231, .12]], 9, .78, .96), ...striations(c, 'foreground-rock', 5, true)], .86, 4, .04)])),
+        variant('around', '机制 · 外围染 / 留主体白', c.ink([layer('background-wash', around, .24, 0, .72, 1, 'glaze', .94, { edgeDeposit: .42, edgeWidth: .3 }), ...outerEdgeLayers(.7), layer('structure', structure, .58, 2, .04)])),
+        variant('organized', '组织 · 远染留白 / 近景重笔', c.ink([layer('background-wash', around, .23, 0, .72, 1, 'glaze', .94, { edgeDeposit: .42, edgeWidth: .3 }), ...outerEdgeLayers(.7), layer('snow-structure', structure.slice(0, 3), .45, 2, .05), layer('foreground', [c.stroke('foreground-bank', [[65, 225, .1], [152, 212, .82], [222, 226, .7], [326, 231, .12]], 9, .78, .96), ...striations(c, 'foreground-rock', 5, true)], .86, 4, .04)])),
       ]),
     study('mogu', '51 · 没骨 · 设色造形', ['line-mogu'], '独立勾廓支架 → 色笔边缘造形 → 花叶枝的叠接。',
       '中、右列花瓣和叶面的色与空白承担轮廓，不依靠预先的闭合墨线。枝梗仍是物象自身的线。',
@@ -384,20 +447,27 @@ function batch19(options) {
 function scatterBundles(c, id, anchors, count = 7) {
   const rng = random(c.seed ^ hash(id));
   return anchors.flatMap(([x, y, dx, dy], a) => {
-    const key = c.seed ^ hash(`${id}-${a}`), bend = (rng() - .5) * 19;
+    const key = c.seed ^ hash(`${id}-${a}`), bend = boundedGaussian(rng) * 6.2;
+    const lengthScale = Math.max(.68, Math.min(1.2, [1.12, .76, 1.02][a % 3] * (1 + boundedGaussian(rng) * .10)));
+    const widthScale = 1 + boundedGaussian(rng) * .06;
+    dx *= lengthScale; dy *= lengthScale;
     const path = [{ x, y, pressure: .26 }, { x: x + dx * .25 + bend, y: y + dy * .27, pressure: .91 },
       { x: x + dx * .57 - bend * .4, y: y + dy * .63, pressure: .54 }, { x: x + dx, y: y + dy, pressure: .12 }];
-    return splitBristles(path, count, { seed: key, spread: 16 + rng() * 11, width: 2.5 + rng() * 1.1, opacity: .83, variance: .67, spacing: 4 }).map((strand, k) => {
-      const origin = strand.points[0], angle = k === 0 ? -.03 : (rng() - .5) * .47, cs = Math.cos(angle), sn = Math.sin(angle), scale = .73 + rng() * .5;
+    return splitBristles(path, count, { seed: key, spread: [26, 16, 22][a % 3] * widthScale, width: [4, 2.1, 3][a % 3] * widthScale, opacity: .83, variance: .67, spacing: 4 }).map((strand, k) => {
+      // Two fragments of the same outer bristle retain one transform. Their
+      // unequal start/end and gap remain explicit in the split source.
+      const strandRng = random(key ^ hash(strand.id.replace(/-part-\d+$/, ''))), central = strand.id === 'bristle-0';
+      const origin = { x, y }, angle = boundedGaussian(strandRng) * (central ? .018 : .12), cs = Math.cos(angle), sn = Math.sin(angle);
+      const scale = Math.max(.7, Math.min(1.17, 1 + boundedGaussian(strandRng) * (central ? .045 : .13)));
       const shifted = strand.points.map((p, i) => {
         const px = (p.x - origin.x) * scale, py = (p.y - origin.y) * scale;
         return { x: origin.x + px * cs - py * sn, y: origin.y + px * sn + py * cs,
           pressure: varyPressure(p.pressure ?? .8, .42, { seed: key ^ hash(strand.id), at: i / Math.max(1, strand.points.length - 1), wavelength: .21 }) };
       });
       const points = jitterPath(shifted, 1.3, { seed: key ^ hash(strand.id), wavelength: 6.7, preserveEndpoints: false }).map(p => [p.x, p.y, p.pressure]);
-      const central = strand.id === 'bristle-0';
-      const outerDryness = .53 + rng() * .28, outerEndDryness = .76 + rng() * .13;
-      return c.stroke(`${id}-${a}-${strand.id}`, points, strand.width * (central ? 2.15 : 1), central ? .27 : outerDryness, central ? Math.max(.9, strand.opacity) : strand.opacity,
+      const outerDryness = .53 + strandRng() * .28, outerEndDryness = .76 + strandRng() * .13;
+      const width = central ? Math.max(4.5, strand.width * 2.15) : strand.width * Math.max(.75, Math.min(1.25, 1 + boundedGaussian(strandRng) * .14));
+      return c.stroke(`${id}-${a}-${strand.id}`, points, width, central ? .25 + strandRng() * .03 : outerDryness, central ? Math.max(.9, strand.opacity) : strand.opacity,
         { axis: central || k % 3 ? 'center' : 'side', rhythm: 'hesitant', strength: .42, controls: central
           ? [{ at: .24, inkLoad: 1, dryness: .24 }, { at: .73, inkLoad: .94, dryness: .36 }]
           : [{ at: .24, inkLoad: .95 }, { at: .73, inkLoad: .6, dryness: outerEndDryness }] });
@@ -416,9 +486,9 @@ function batch20(options) {
   const draggingWater = [c.stroke('directional-clear-drag', [[146, 151, .1], [217, 156, .86], [278, 187, .65], [352, 205, .1]], 39, .04, .9, { axis: 'side' })];
   const field = regionRows(c, 'drag-field', ROCK, { width: 32, dryness: .14, opacity: .7 });
   const parallel = Array.from({ length: 20 }, (_, i) => c.stroke(`parallel-${i}`, [[138 + i * 11, 102, .2], [174 + i * 11, 202, .75]], 2.2, .78, .8));
-  const bundles = scatterBundles(c, 'scatter-bundle', [[193, 92, 41, 94], [271, 132, 63, 71], [359, 159, 66, 58]]);
+  const bundles = scatterBundles(c, 'scatter-bundle', [[190, 88, 38, 112], [222, 139, 70, 60], [353, 155, 82, 64]]);
   const composite = [...scatterBundles(c, 'long-flow', [[155, 119, 27, 91], [213, 89, 39, 125]], 6),
-    ...scatterBundles(c, 'cross-flow', [[280, 131, 65, 67], [352, 160, 86, 51]], 7),
+    ...scatterBundles(c, 'cross-flow', [[231, 153, 76, 58], [352, 160, 86, 51]], 7),
     ...dots(c, 'aggregate-accents', [[218, 187], [331, 188]], { count: 3, spread: 17, dryness: .73, width: 10 })];
   return [
     study('midian', '58 · 米点皴', ['cun-midian'], '等距横点 → 含水横点分层相叠 → 远近点层与云气留白。',
@@ -436,7 +506,7 @@ function batch20(options) {
         variant('organized', '中性组织 · 墨势 / 交界 / 干线', c.water([inkEvent('base-field', field, .13, 0, .82, 2.5), inkEvent('drag', wetDrag, .4, .7, .8, 1.5, 'wet-mix'), waterEvent('clear-drag', draggingWater, 1.1, .7), inkEvent('dry-structure', [...outline(c), ...striations(c, 'dry-interrupt', 5, true)], .68, 4.1, .05)])),
       ]),
     study('baoshi-research', '60 · 抱石 · 散锋与山势研究', ['cun-baoshi'], '均匀平行丝 → 散锋束的聚散 → 多方向线面与墨层。',
-      '束内路径、压力和枯润不同，束间跟随山体转向；第三列将长线、交线、聚区点和底墨分开保存。',
+      '笔束长宽以有界种子高斯量变化，保留清楚主毫与短断外毫；邻束少量相搭、根部错开，第三列将长线、交线、聚区点和底墨分开保存。',
       '馆方支持破笔散锋、聚散分明与综合语汇。这里仅研究其中可描述的接触与组织，不能以散锋或噪声概括傅抱石个人风格。', [
         variant('parallel', '反例 · 均一平行刷丝', c.ink([layer('parallel-threads', parallel, .7, 0, .08)])),
         variant('bundles', '机制 · 三束散锋 / 压力与聚散', c.ink([layer('scattered-bundles', bundles, .78, 0, .06)])),
@@ -538,18 +608,29 @@ const findEvent = (document, id) => events(document).find(e => e.id === id);
 const check = (id, pass, detail) => ({ id, pass: !!pass, ...(detail ? { detail } : {}) });
 function revisionChecks(item) {
   const get = id => item.variants.find(v => v.id === id)?.document;
-  if (['scorched', 'tuoni-probe', 'glazing', 'supporting-wash'].includes(item.id)) return [check('original-layers-do-not-opt-into-soft-density', item.variants.every(v => events(v.document).every(e => !Object.hasOwn(e, 'edgeSoftness'))))];
+  if (['scorched', 'tuoni-probe', 'glazing', 'supporting-wash'].includes(item.id)) return [check('original-layers-do-not-opt-into-soft-density', item.variants.every(v => events(v.document).every(e => !Object.hasOwn(e, 'edgeSoftness') && !Object.hasOwn(e, 'edgeDeposit'))))];
   if (item.id === 'aged') {
     const grains = findEvent(get('material'), 'retained-deposit-grains');
-    return [check('editable-concentrated-micro-deposits', grains?.concentration >= .95 && grains.strokes.length >= 40 && grains.strokes.every(s => s.options.width >= .6 && s.options.width <= 2.5 && s.points.every(p => p.pressure >= .9)))];
+    const core = grains?.strokes.filter(s => sourceId(s).includes('-core-')), tail = grains?.strokes.filter(s => sourceId(s).includes('-tail-'));
+    return [check('editable-concentrated-micro-deposits', grains?.concentration >= .95 && grains.strokes.length >= 60 && grains.strokes.every(s => s.options.width >= 1.1 && s.options.width <= 4.3 && s.points.every(p => p.pressure >= .9))),
+      check('granules-form-dense-cores-and-sparse-smaller-tails', core?.length > tail?.length * 2 && Math.max(...core.map(s => s.options.width)) > Math.max(...tail.map(s => s.options.width)) * 1.4 && new Set(grains.strokes.map(s => sourceId(s).match(/^retained-grain-(\d+)-/)[1])).size === 5)];
   }
   if (['splashed', 'rendering', 'background-wash', 'divided-wash'].includes(item.id)) {
     const target = item.id === 'splashed' ? findEvent(get('organized'), 'initial-mass') : item.id === 'rendering' ? findEvent(get('organized'), 'local-rendering')
       : item.id === 'background-wash' ? findEvent(get('around'), 'background-wash') : findEvent(get('two-brush'), 'local-shadow');
     const allowed = item.id === 'splashed' ? ['initial-mass'] : item.id === 'rendering' ? ['blanket', 'local-rendering', 'outside-rendering']
       : item.id === 'background-wash' ? ['subject-gray', 'background-wash'] : ['local-shadow', 'local-second-pass'];
-    return [check('dense-irregular-boundary-and-varying-local-load', target?.strokes.every(s => s.options.clip?.length >= 40) && new Set(target.strokes.map(s => Math.round(s.options.width * 100))).size > 10 && new Set(target.strokes.map(s => Math.round(s.options.opacity * 10000))).size > 10),
-      check('soft-density-opt-in-is-confined-to-authored-washes', target.edgeSoftness >= .8 && target.edgeSoftness <= 1 && item.variants.every(v => events(v.document).every(e => !Object.hasOwn(e, 'edgeSoftness') || allowed.includes(e.id) && e.edgeSoftness >= .8 && e.edgeSoftness <= 1)))];
+    const edgeChecks = ['rendering', 'background-wash'].includes(item.id) ? (() => {
+      const doc = get(item.id === 'rendering' ? 'local' : 'around'), prefix = item.id === 'rendering' ? 'local' : 'outer';
+      const dry = findEvent(doc, `${prefix}-dry-touches`), wet = findEvent(doc, `${prefix}-wet-touches`);
+      return [check('selected-edges-have-independent-dry-and-damp-touches', dry?.strokes.length >= 3 && dry.strokes.length <= 4 && wet?.strokes.length === 2
+        && dry.strokes.every(s => s.options.dryness >= .6 && s.options.width <= 6) && wet.strokes.every(s => s.options.dryness < .25 && s.options.width >= 9)
+        && !Object.hasOwn(dry, 'edgeSoftness') && !Object.hasOwn(wet, 'edgeSoftness')),
+      check('edge-deposit-is-explicit-and-confined-to-target-washes', target.edgeDeposit >= .35 && target.edgeDeposit <= .65 && target.edgeWidth >= .2 && target.edgeWidth <= .4
+        && item.variants.every(v => events(v.document).every(e => !Object.hasOwn(e, 'edgeDeposit') || allowed.includes(e.id))))];
+    })() : [];
+    return [check('local-irregular-clips-and-varying-load', target?.strokes.every(s => s.options.clip?.length >= 3) && target.strokes.some(s => s.options.clip.length > 8) && new Set(target.strokes.map(s => Math.round(s.options.width * 100))).size > 10 && new Set(target.strokes.map(s => Math.round(s.options.opacity * 10000))).size > 10),
+      check('soft-density-opt-in-is-confined-to-authored-washes', target.edgeSoftness >= .8 && target.edgeSoftness <= 1 && item.variants.every(v => events(v.document).every(e => !Object.hasOwn(e, 'edgeSoftness') || allowed.includes(e.id) && e.edgeSoftness >= .8 && e.edgeSoftness <= 1))), ...edgeChecks];
   }
   if (item.id === 'mogu') {
     const marks = get('organized').recipe.groups.find(g => g.id === 'direct-petals').strokes;
@@ -565,8 +646,9 @@ function revisionChecks(item) {
     const angles = marks.map(s => Math.atan2(s.points.at(-1).y - s.points[0].y, s.points.at(-1).x - s.points[0].x));
     const lengths = marks.map(s => s.points.reduce((sum, p, i) => i ? sum + Math.hypot(p.x - s.points[i - 1].x, p.y - s.points[i - 1].y) : sum, 0));
     const main = marks.filter(s => sourceId(s).endsWith('-bristle-0'));
-    return [check('split-bundles-vary-angle-length-and-force', Math.max(...angles) - Math.min(...angles) > .5 && Math.max(...lengths) > Math.min(...lengths) * 1.8 && marks.some(s => sourceId(s).includes('part')) && marks.every(s => s.points.some(p => p.pressure > .3))),
-      check('continuous-main-bristles-remain-readable', main.length === 3 && main.every(s => s.options.width > 4 && s.options.dryness <= .3 && s.options.controls.every(control => control.inkLoad >= .9)))];
+    return [check('split-bundles-vary-angle-length-and-force', Math.max(...angles) - Math.min(...angles) > .5 && Math.max(...lengths) > Math.min(...lengths) * 1.8 && marks.some(s => sourceId(s).includes('part')) && marks.every(s => s.points.some(p => p.pressure > 0))),
+      check('continuous-main-bristles-remain-readable', main.length === 3 && main.every(s => s.options.width > 4 && s.options.dryness <= .3 && s.points.some(p => p.pressure > .5) && s.options.controls.every(control => control.inkLoad >= .9))),
+      check('bundle-widths-have-visible-authored-hierarchy', main.length === 3 && main[0].options.width > main[2].options.width && main[2].options.width > main[1].options.width && main[0].options.width > main[1].options.width * 1.4)];
   }
   if (item.id === 'kulou-probe') return [check('fine-skeleton-has-authored-pressure-accents', allStrokes(get('fine-skeleton')).every(s => s.points.length >= 8 && Math.max(...s.points.map(p => p.pressure)) - Math.min(...s.points.map(p => p.pressure)) > .5))];
   if (item.id === 'dingtou') {
@@ -597,9 +679,9 @@ function audit16(studies) {
 }
 function audit17(studies) {
   const rendering = findVariant(studies, 'rendering', 'organized'), background = findVariant(studies, 'background-wash', 'around'), mogu = findVariant(studies, 'mogu', 'organized');
-  const backgroundClips = findEvent(background, 'background-wash')?.strokes.map(s => s.options.clip);
+  const backgroundStrokes = findEvent(background, 'background-wash')?.strokes;
   return [check('separate-local-and-outer-rendering-regions', findEvent(rendering, 'local-rendering')?.strokes.every(s => s.options.clip?.length >= 3) && findEvent(rendering, 'outside-rendering')?.strokes.every(s => s.options.clip?.length >= 3) && JSON.stringify(findEvent(rendering, 'local-rendering')?.strokes[0].options.clip) !== JSON.stringify(findEvent(rendering, 'outside-rendering')?.strokes[0].options.clip)),
-    check('background-is-two-authored-regions', new Set(backgroundClips?.map(p => JSON.stringify(p))).size === 2 && !findEvent(background, 'subject-gray')),
+    check('background-is-two-authored-regions', backgroundStrokes.some(s => sourceId(s).startsWith('background-left-')) && backgroundStrokes.some(s => sourceId(s).startsWith('background-right-')) && !findEvent(background, 'subject-gray')),
     check('direct-color-without-independent-petal-outline', mogu.recipe.groups.some(g => g.id === 'direct-petals') && !mogu.recipe.groups.some(g => g.id.includes('outline')) && mogu.recipe.groups.filter(g => g.id === 'direct-petals' || g.id === 'direct-leaves').every(g => g.parentId === 'stems' && g.strokes.every(s => s.options.ink !== SIZE.ink)))];
 }
 function audit18(studies) {
@@ -671,7 +753,8 @@ export function auditRemainingInk(item) {
     }
     case 'background-wash': {
       const doc = get('around');
-      add('two-background-regions-and-white-subject', new Set(findEvent(doc, 'background-wash').strokes.map(s => JSON.stringify(s.options.clip))).size === 2 && !findEvent(doc, 'subject-gray')); break;
+      const marks = findEvent(doc, 'background-wash').strokes;
+      add('two-background-regions-and-white-subject', marks.some(s => sourceId(s).startsWith('background-left-')) && marks.some(s => sourceId(s).startsWith('background-right-')) && !findEvent(doc, 'subject-gray')); break;
     }
     case 'mogu': {
       const doc = get('organized');

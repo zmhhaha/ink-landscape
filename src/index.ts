@@ -3,6 +3,8 @@ export { createInkScene, createRandom, pointInPolygon, resamplePath } from './co
 export { sampleStrokePath } from './path.js';
 export { createNoise1D, jitterPath, varyPressure, splitBristles } from './perturbation.js';
 export type * from './perturbation.js';
+export { getNoise1D, getNoise2D, getFractalNoise2D, poissonDiskSampling, accumulateEdge } from './natural.js';
+export type * from './natural.js';
 export { renderCanvas } from './canvas.js';
 export { createBrushStroke } from './brushwork.js';
 export type * from './brushwork.js';

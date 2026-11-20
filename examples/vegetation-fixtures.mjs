@@ -1,4 +1,4 @@
-import { createVegetationDocument, reviseVegetationDocument } from '../dist/index.js';
+import { createVegetationDocument, reviseVegetationDocument, getNoise1D } from '../dist/index.js';
 import { insetFromAuthoredRidge, authoredBranchAttachment, authoredGrowthLeaf } from './authored-study-path.mjs';
 
 export const vegetationInputs = Object.freeze({ seed: 261127, layout: 'slope', widthScale: 1, dryness: .52, time: 8 });
@@ -75,10 +75,10 @@ export function makeVegetationStudies(options = {}) {
     stroke('dab', dab(112 + i % 7 * 54, 58 + Math.floor(i / 7) * 38, 3, 2, false), 10, i + 5, neutral),
   ] }));
   const mossPlaces = [
-    [113, 153], [124, 139], [133, 128], [147, 121], [157, 111], [166, 94], [179, 86], [190, 76], [204, 83],
-    [218, 88], [234, 92], [245, 106], [250, 118], [248, 130], [261, 145], [272, 157],
-    [342, 146], [352, 136], [366, 137], [381, 132], [397, 139], [409, 149], [424, 155], [440, 168],
-    [128, 154], [149, 132], [177, 102], [188, 92], [216, 96], [243, 119], [358, 148], [382, 145], [405, 153], [433, 170], [447, 182],
+    [121, 148], [124, 139], [127, 145], [144, 124], [150, 126], [147, 121], [177, 91], [183, 87], [187, 90],
+    [213, 93], [220, 95], [217, 99], [244, 117], [247, 121], [251, 124], [263, 148],
+    [346, 143], [352, 136], [356, 141], [382, 134], [389, 139], [386, 133], [425, 157], [431, 162],
+    [129, 151], [153, 134], [180, 102], [190, 94], [225, 102], [252, 128], [360, 149], [391, 148], [395, 153], [436, 172], [449, 183],
   ];
   const mossRidges = [rockGuides[0], rockGuides[3]];
   const groupedMoss = mossPlaces.map((point, i) => {
@@ -88,10 +88,11 @@ export function makeVegetationStudies(options = {}) {
   const variedMoss = mossPlaces.map((point, i) => {
     const [x, y] = insetFromAuthoredRidge(point, mossRidges, [3, 5.5, 9, 13][i % 4]);
     const highRidge = y < 133;
+    const principal = [1, 4, 6, 10, 13, 17, 20, 22].includes(i);
     return { id: `moss-${i}`, strokes: [stroke('dab',
       dab(x, y, [4, -3, 5, 2][i % 4], [2, 4, -1][i % 3]),
-      (highRidge ? [12.5, 8, 10.5, 7, 14] : [8.4, 6.5, 9.1, 5.8, 10])[i % 5], i + 5,
-      { opacity: (highRidge ? [.84, .65, .8, .57] : [.66, .49, .61, .45])[i % 4] })] };
+      (principal ? highRidge ? 14.5 : 10.2 : (highRidge ? [8.4, 6.8, 9.1, 6.2] : [6.4, 4.9, 7, 5.4])[i % 4]), i + 5,
+      { opacity: principal ? .9 : (highRidge ? [.7, .54, .65, .48] : [.59, .43, .53, .39])[i % 4] })] };
   });
 
   const looseLeaf = ([x, y, dx, dy]) => [[x, y, 1], [x + dx * .5, y + dy * .5, 1], [x + dx, y + dy, 1]];
@@ -102,19 +103,27 @@ export function makeVegetationStudies(options = {}) {
     return authoredGrowthLeaf(frame, { length: Math.hypot(guide[2], guide[3]) * 1.08, spread: leafSpreads[i],
       face: projected ? leafFaces[i] : 'front', curl: [1.8, -1.2, 2.6, -.7][i % 4], stem: 2.4 });
   };
-  const leafControls = load => [
+  // Only these selected intersections carry a short root accent. It belongs
+  // to the leaf stroke itself, rather than a shadow dot repeated under leaves.
+  const darkRoots = new Set([4, 9, 13, 19]);
+  const leafControls = (load, darkRoot = false) => [
     { at: 0, pressure: .4, side: .12, angle: 1.4, inkLoad: load * .8 },
-    { at: .3, pressure: 1, side: .62, angle: 1.35, inkLoad: load },
+    { at: .065, pressure: darkRoot ? .97 : .58, side: .16, angle: 1.43, inkLoad: load * (darkRoot ? 1 : .79) },
+    { at: .17, pressure: .76, side: .38, angle: 1.38, inkLoad: load * .91 },
+    { at: .37, pressure: 1, side: .62, angle: 1.35, inkLoad: load },
     { at: .68, pressure: .74, side: .38, angle: 1.6, inkLoad: load * .94 },
-    { at: 1, pressure: .04, side: .05, angle: 1.5, inkLoad: load * .6 },
+    { at: .9, pressure: .24, side: .13, angle: 1.56, inkLoad: load * .74 },
+    { at: 1, pressure: .03, side: .03, angle: 1.5, inkLoad: load * .56 },
   ];
   const attachedLeaves = leafGuides.map((_, i) => ({ id: `leaf-${i}`, strokes: [stroke('blade',
     growth(i, false).values.map(([x, y]) => [x, y, 1]), 13, i + 5, neutral)] }));
   const pressedLeaves = leafGuides.map((_, i) => {
     const projected = growth(i, true);
-    return { id: `leaf-${i}`, strokes: [stroke('blade', projected.values,
+    const values = projected.values.map(([x, y, pressure], p) => [x, y, p === 2 || p === 3
+      ? pressure * (.95 + getNoise1D(i * .71 + p * 1.9, 261126) * .045) : pressure]);
+    return { id: `leaf-${i}`, strokes: [stroke('blade', values,
       [13.5, 11.8, 14.2, 10.6, 13][i % 5] * projected.widthScale, i + 5,
-      { controls: leafControls(projected.inkLoad), opacity: [.87, .76, .82, .72][i % 4] * projected.opacityScale })] };
+      { controls: leafControls(projected.inkLoad, darkRoots.has(i)), opacity: [.87, .76, .82, .72][i % 4] * projected.opacityScale })] };
   });
 
   const loopLeaves = leafGuides.map((_, i) => {
@@ -144,7 +153,14 @@ export function makeVegetationStudies(options = {}) {
     const projected = growth(i, true);
     return { id: `leaf-${i}`, strokes: growingSides(i, true).map((values, j) =>
       stroke(j ? 'right' : 'left', values, [2.3, 1.8, 2.1, 1.6][i % 4], 5 + i * 2 + j,
-        { opacity: [.86, .78, .83, .72][i % 4] * projected.opacityScale })) };
+        { controls: [
+          { at: 0, pressure: .72, inkLoad: projected.inkLoad * .84 },
+          { at: .065, pressure: darkRoots.has(i) && j === 0 ? .96 : .82, inkLoad: projected.inkLoad },
+          { at: .26, pressure: .43, inkLoad: projected.inkLoad * .84 },
+          { at: .6, pressure: .56, inkLoad: projected.inkLoad * .93 },
+          { at: .85, pressure: .3, inkLoad: projected.inkLoad * .77 },
+          { at: 1, pressure: .04, inkLoad: projected.inkLoad * .58 },
+        ], opacity: [.86, .78, .83, .72][i % 4] * projected.opacityScale })) };
   });
   const layeredBranches = units => [...units.slice(0, 6), ...structure(branchGuides, 'branch'), ...units.slice(6)];
 

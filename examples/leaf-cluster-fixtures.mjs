@@ -1,4 +1,4 @@
-import { createVegetationDocument, transformVegetationUnit } from '../dist/index.js';
+import { createVegetationDocument, transformVegetationUnit, getNoise1D } from '../dist/index.js';
 import { authoredBranchAttachment, authoredGrowthLeaf } from './authored-study-path.mjs';
 
 export const leafClusterInputs = Object.freeze({ seed: 261128, layout: 'slope', widthScale: 1, dryness: .48, time: 8 });
@@ -98,11 +98,21 @@ export function makeLeafClusterStudies(options = {}) {
         spread: spread + (stage === 2 ? angles[i] * .25 : 0), face: stage === 2 ? ['front', 'edge', 'back'][(i + j * 2) % 3] : 'front',
         curl: stage === 2 ? [1.9, -.8, 2.6, -1.5][(i + j) % 4] : 1.1, stem: 2.3 });
       const contact = family === 'jie' ? centerContact : softContact;
-      return stroke(`leaf-${j}`, projected.values,
+      const principal = family === 'groups' ? j === 1 : j === 0;
+      const darkRoot = stage === 2 && principal && [3, 4, 7].includes(i);
+      const values = projected.values.map(([x, y, pressure], p) => [x, y, p === 2 || p === 3
+        ? pressure * (.95 + getNoise1D(i * .81 + j * 1.17 + p * .63, 261128) * .04) : pressure]);
+      const controls = contact.controls.map(control => ({ ...control, inkLoad: projected.inkLoad }));
+      controls.splice(1, 0, { at: .085, pressure: darkRoot ? .94 : .56,
+        side: family === 'jie' ? .06 : .16, angle: 1.46, inkLoad: projected.inkLoad * (darkRoot ? 1 : .83) });
+      // Preserve all shared roots and the first tangent segment. Main and side
+      // members are weighted within the existing leaf strokes, never by a
+      // mechanical dark stamp underneath each cluster.
+      return stroke(`leaf-${j}`, values,
         (stage === 2 ? widths[(i + j) % widths.length] : 8.5) * projected.widthScale
-          * (family !== 'groups' ? j === 0 ? 1.12 : .86 : 1),
-        5 + i * 6 + j, { ...contact, controls: contact.controls.map(control => ({ ...control, inkLoad: projected.inkLoad })),
-          opacity: (stage === 2 ? [.86, .7, .8, .58][(i + j) % 4] : .76) * projected.opacityScale });
+          * (principal ? 1.34 : .78),
+        5 + i * 6 + j, { ...contact, controls,
+          opacity: (principal ? .9 : stage === 2 ? [.74, .61, .69, .51][(i + j) % 4] : .7) * projected.opacityScale });
     }) };
   };
   const units = (family, stage) => anchors.map((_, i) => cluster(family, i, stage));

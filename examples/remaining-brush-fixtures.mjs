@@ -95,17 +95,58 @@ function resistanceSource(seed, reverse = false) {
   });
 }
 
-function resistanceControls(seed, reverse, emphasizeTurn = false) {
+function resistanceControls(seed, reverse) {
   const noise = createNoise1D(seed ^ (reverse ? 0x38a37 : 0x42a71)), total = strokeLength(fineFlow), locations = [0];
   let distance = 0;
   while ((distance += 9 + (noise(distance / 31.7) + 1) * 5.5) < total - 6) locations.push(distance);
   locations.push(total);
   return locations.map(at => {
-    const t = at / total, local = emphasizeTurn ? Math.exp(-Math.pow((t - .49) / .065, 2)) : 0;
-    return { at: t, pressure: Math.min(.99, .87 + noise(at / 13.9) * .075 + local * .07),
-      side: (reverse ? .25 : .105) + noise(at / 27.1) * .035 + local * .19,
-      angle: 1.45 + noise(at / 34.7) * .09 + local * .15,
+    const t = at / total;
+    return { at: t, pressure: Math.min(.99, .87 + noise(at / 13.9) * .075),
+      side: (reverse ? .25 : .105) + noise(at / 27.1) * .035,
+      angle: 1.45 + noise(at / 34.7) * .09,
       inkLoad: .945 + noise(at / 21.3) * .032 };
+  });
+}
+
+const distances = points => points.reduce((list, point, index) => {
+  if (index) list.push(list.at(-1) + Math.hypot(point.x - points[index - 1].x, point.y - points[index - 1].y));
+  return list;
+}, [0]);
+// Selection names an authored action, not a detected corner. Dense sampling
+// may place its nearest station a fraction of a unit away from that anchor.
+const namedStation = (values, [x, y]) => values.reduce((best, point, index) =>
+  Math.hypot(point[0] - x, point[1] - y) < Math.hypot(values[best][0] - x, values[best][1] - y) ? index : best, 0);
+const steadyContact = side => [{ at: 0, pressure: .9, side, angle: Math.PI / 2, inkLoad: .86 },
+  { at: 1, pressure: .9, side, angle: Math.PI / 2, inkLoad: .86 }];
+function pauseContact(line, index, peakSide = .18, peakAngle = 1.5) {
+  const measured = distances(line.points), total = measured.at(-1), center = measured[index], baseSide = .04;
+  const states = [[-19, .9, baseSide, Math.PI / 2, .86], [-11, .86, baseSide, Math.PI / 2, .86],
+    [-4, .95, peakSide * .7, peakAngle, .95], [0, 1, peakSide, peakAngle, 1],
+    [5, .94, peakSide * .65, peakAngle + .06, .94], [12, .87, baseSide, Math.PI / 2, .86],
+    [19, .9, baseSide, Math.PI / 2, .86]];
+  return [steadyContact(baseSide)[0], ...states.map(([delta, pressure, side, angle, inkLoad]) =>
+    ({ at: (center + delta) / total, pressure, side, angle, inkLoad })), steadyContact(baseSide)[1]];
+}
+
+function resistanceTurnContact(line, index) {
+  const controls = line.options.controls, measured = distances(line.points), total = measured.at(-1), center = measured[index] / total;
+  // Keep the original controls at both window boundaries. Outside those
+  // existing stations interpolation is exactly the unchanged mechanism.
+  const left = controls.filter(control => control.at <= center - 15 / total).at(-1).at,
+    right = controls.find(control => control.at >= center + 15 / total).at;
+  const valueAt = (at, key) => {
+    const a = controls.filter(control => control.at <= at).at(-1), b = controls.find(control => control.at >= at),
+      fraction = b.at === a.at ? 0 : (at - a.at) / (b.at - a.at), u = fraction * fraction * (3 - 2 * fraction);
+    return a[key] * (1 - u) + b[key] * u;
+  };
+  const locations = [...new Set([...controls.map(control => control.at), center - 5 / total, center, center + 6 / total])].sort((a, b) => a - b);
+  return locations.map(at => {
+    if (at <= left || at >= right) return controls.find(control => control.at === at);
+    const u = at <= center ? (at - left) / (center - left) : (right - at) / (right - center), pulse = u * u * (3 - 2 * u);
+    return { at, pressure: Math.min(1, valueAt(at, 'pressure') + .075 * pulse),
+      side: valueAt(at, 'side') + .14 * pulse, angle: valueAt(at, 'angle') + .12 * pulse,
+      inkLoad: Math.min(1, valueAt(at, 'inkLoad') + .065 * pulse) };
   });
 }
 
@@ -126,34 +167,45 @@ function splitStrokes(stage, { stroke, seed }) {
       width: 5.4, opacity: .79, variance: stage === 1 ? .36 : .48, spacing: 1.8 });
   return bundles.flatMap((bundle, i) => {
     const center = i === 0, identity = bundle.id.split('-part')[0], key = seedFor(splitSeed, identity), noise = createNoise1D(key),
-      width = center ? (stage === 1 ? 10.4 : 11.2) : Math.min(6, bundle.width * (.75 + (noise(.4) + 1) * .1)),
-      opacity = center ? .94 : .42 + bundle.opacity * .28 + (noise(2.1) + 1) * .04;
-    const points = bundle.points.map((point, j) => {
-      if (center) return { ...point, pressure: varyPressure(point.pressure ?? 1, .045, { seed: key, at: j * 1.8, wavelength: 31 }) };
+      width = center ? (stage === 1 ? 11.8 : 12.5) : Math.min(4.9, bundle.width * (1.02 + (noise(.4) + 1) * .22)),
+      opacity = center ? .96 : .44 + bundle.opacity * .35 + (noise(2.1) + 1) * .06;
+    // The main loaded contact follows the unchanged authored skeleton exactly.
+    const points = (center ? fineFlow : bundle.points).map((point, j) => {
+      if (center) return { ...point, pressure: j === 0 || j === fineFlow.length - 1 ? point.pressure
+        : varyPressure(point.pressure ?? 1, .045, { seed: key, at: j * 1.8, wavelength: 31 }) };
       const t = j / (bundle.points.length - 1), enter = .045 + (noise(3.7) + 1) * .035,
         exit = .06 + (noise(5.9) + 1) * .05, e = Math.min(1, t / enter), f = Math.min(1, (1 - t) / exit),
         envelope = (.08 + .92 * e * e * (3 - 2 * e)) * (.05 + .95 * f * f * (3 - 2 * f));
-      return { ...point, pressure: varyPressure((point.pressure ?? 1) * envelope, .11,
+      return { ...point, pressure: varyPressure(Math.pow(point.pressure ?? 1, .85) * envelope, .11,
         { seed: key, at: j * 1.8, wavelength: 12.3 }) };
     });
-    // Extra local breaks apply to selected outer traces only; the central load
-    // stays continuous and the omitted points never become hidden white paint.
-    const sections = !center && (i === 1 || stage === 2 && i % 3 === 2) && points.length > 20
-      ? [points.slice(0, Math.floor(points.length * (stage === 1 ? .46 : .44))),
-        points.slice(Math.ceil(points.length * (stage === 1 ? .5 : .52)))] : [points];
+    // Outer hairs touch in unequal short runs rather than long parallel rails.
+    // Every omitted interval is absent source data, never white overpainting.
+    const sections = [];
+    if (center) sections.push(points);
+    else {
+      let cursor = Math.floor((noise(11.3) + 1) * 3), part = 0;
+      while (cursor < points.length - 2) {
+        const length = (stage === 1 ? 12 : 8) + Math.round((noise(part * 1.79 + 13.7) + 1) * (stage === 1 ? 11 : 8)),
+          section = points.slice(cursor, Math.min(points.length, cursor + length));
+        if (section.length > 2) sections.push(section);
+        cursor += length + 4 + Math.round((noise(part * 2.13 + 17.9) + 1) * 5);
+        part++;
+      }
+    }
     return sections.map((section, part) => {
       const faded = section.map((point, j) => {
-        let taper = 1;
-        if (sections.length > 1 && part === 0 && j >= section.length - 5) taper = .1 + .9 * Math.pow((section.length - 1 - j) / 4, 1.4);
-        if (sections.length > 1 && part > 0 && j < 5) taper = .12 + .88 * Math.pow(j / 4, 1.25);
+        const entering = Math.min(1, j / 3), releasing = Math.min(1, (section.length - 1 - j) / 4),
+          taper = center ? 1 : Math.pow(entering, 1.25) * Math.pow(releasing, 1.4);
         return { ...point, pressure: (point.pressure ?? 1) * taper };
       });
+      const local = center ? 1 : .74 + (noise(part * 1.37 + 23.1) + 1) * .13;
       return stroke(`${center ? 'center' : 'outer'}-${bundle.id}${sections.length > 1 ? `-cut-${part}` : ''}`,
-      sourceValues(faded), width, { opacity, dryness: center ? .29 : .49 + (noise(7.1) + 1) * .08,
+      sourceValues(faded), width * local, { opacity: opacity * local, dryness: center ? .15 : .28 + (noise(7.1 + part * .47) + 1) * .07,
         start: center ? 0 : .035 + (noise(9.2) + 1) * .08, duration: 2.5,
-        controls: [{ at: 0, side: center ? .05 : .18, inkLoad: center ? .98 : .82 },
-          { at: .47, side: center ? .07 : .24, inkLoad: center ? 1 : .89 },
-          { at: 1, side: center ? .03 : .13, inkLoad: center ? .96 : .76 }],
+        controls: [{ at: 0, side: center ? .05 : .11, inkLoad: center ? .99 : .86 },
+          { at: .47, side: center ? .07 : .19, inkLoad: center ? 1 : .94 * Math.sqrt(local) },
+          { at: 1, side: center ? .03 : .08, inkLoad: center ? .98 : .82 }],
       });
     });
     });
@@ -193,7 +245,7 @@ const brush13 = [
     } },
   { id: 'brush-split', title: '39 · 散锋聚散', techniqueIds: ['brush-split'], detail: [300, 130],
     variable: '等距等长梳丝反例 → 共同行势内的异束接触 → 局部断续、聚拢与墨量差。',
-    criteria: '中心束较宽、较实且连续；外束各有独立宽度、墨量、起收和局部断口，中段展开而两端趋聚。短束续接共同笔势，白缝不能从头至尾等宽，也不要求各束等强。',
+    criteria: '实主毫保留原骨架、端点并连续承墨；外毫按共同笔势形成异强、异长的短接触，零压力起收与明确源缺段留出白缝，避免多条等长平行轨道。',
     limits: '以抱石皴条目中的聚散组织为动作依据，显式束线仍为程序近似，不复原真实笔毫，也不把这组接触实验直接命名为抱石皴或飞白书体。',
     labels: ['反例 · 等距梳丝', '分束 · 共势聚散', '局部 · 断续再聚'],
     make(stage, a) { return [a.group('split', splitStrokes(stage, a))]; } },
@@ -216,9 +268,10 @@ const brush14 = [
     labels: ['对照 · 等接触缓显', '局部 · 按驻释放', '承接 · 顿后换锋'],
     make(stage, { stroke, group }) {
       const points = stage === 0 ? p(flow, .68) : paused;
-      const controls = stage === 2 ? [{ at: 0, side: .04 }, { at: .42, side: .08 }, { at: .51, side: .65, angle: 1.15 },
-        { at: .63, side: .12, angle: 1.68 }, { at: 1, side: .04 }] : contact(.04);
-      return [group('main', [stroke('line', points, 28, { duration: 3.6, controls })])];
+      const line = stroke('line', points, 28, { duration: 3.6 });
+      line.options.controls = stage === 0 ? steadyContact(.04)
+        : pauseContact(line, namedStation(points, [281, 140]), stage === 2 ? .29 : .17, stage === 2 ? 1.35 : 1.5);
+      return [group('main', [line])];
     } },
   { id: 'brush-reposition', title: '41 · 挫势动作假设', techniqueIds: ['brush-reposition'], detail: [275, 138],
     variable: '只有按驻 → 局部短回调再转入 → 回调与接触复正协同。',
@@ -226,9 +279,10 @@ const brush14 = [
     limits: '《翰林要诀》与《书谱》只部分支持具体微动作；此处是可核对的候选，不规定挫、衄、顿的统一边界，不宣称已经还原运腕。',
     labels: ['对照 · 仅顿后行', '回调 · 一点内挫', '协同 · 回调复正'],
     make(stage, { stroke, group }) {
-      const controls = stage === 2 ? [{ at: 0, side: .12 }, { at: .43, side: .58, angle: 1.1 },
-        { at: .52, side: .65, angle: 1.95 }, { at: .62, side: .04, angle: 1.57 }, { at: 1, side: .04 }] : contact(.12);
-      return [group('main', [stroke('line', stage === 0 ? paused : repositioned, 28, { controls })])];
+      const points = stage === 0 ? paused : repositioned, line = stroke('line', points, 28);
+      line.options.controls = pauseContact(line, namedStation(points, stage === 0 ? [281, 140] : [277, 136]),
+        stage === 2 ? .43 : .18, stage === 2 ? 1.84 : 1.5);
+      return [group('main', [line])];
     } },
   { id: 'brush-resistant', title: '42 · 涩行接触候选', techniqueIds: ['brush-resistant'], detail: [280, 140],
     variable: '均匀颤线反例 → 非周期细阻力与连续负荷 → 换向处局部增负后再放行。',
@@ -239,8 +293,10 @@ const brush14 = [
       const points = stage === 0 ? Array.from({ length: 55 }, (_, i) => { const q = sample(flow, i / 54);
         return [q[0], q[1] + (i === 0 || i === 54 ? 0 : Math.sin(i * 2.4) * 5.4), q[2]]; })
         : resistanceSource(seed, false);
-      const controls = stage === 0 ? contact(.04) : resistanceControls(seed, false, stage === 2);
-      return [group('main', [stroke('line', points, 28, { controls, dryness: .26 })])];
+      const controls = stage === 0 ? contact(.04) : resistanceControls(seed, false),
+        line = stroke('line', points, 28, { controls, dryness: .26 });
+      if (stage === 2) line.options.controls = resistanceTurnContact(line, namedStation(sourceValues(fineFlow), [281, 140]));
+      return [group('main', [line])];
     } },
 ];
 
@@ -510,16 +566,35 @@ export function auditRemainingBrush(study) {
           outer.some(s => s.id.includes('-part-') || s.id.includes('-cut-')) &&
           new Set(outer.map(s => s.options.opacity.toFixed(4))).size > 2 &&
           new Set(outer.map(s => `${s.points[0].x.toFixed(3)}/${s.points.at(-1).x.toFixed(3)}`)).size > 3;
-      }), 'A single broad, loaded center stays continuous; outer strands differ in ink, extent and explicit source gaps.'); break;
+      }), 'A single broad, loaded center stays continuous; outer strands differ in ink, extent and explicit source gaps.');
+      add('short-lifted-outer-contacts', [1, 2].every(i => {
+        const center = flat(i).find(s => s.id.startsWith('center-')), outer = flat(i).filter(s => s.id.startsWith('outer-'));
+        return outer.every(s => s.points[0].pressure === 0 && tail(s) === 0 && strokeLength(s.points) < strokeLength(center.points) * .2) &&
+          center.options.dryness < .2 && center.options.opacity >= .95;
+      }), 'Each unequal outer contact is short and explicitly lifted at both ends; the main contact stays loaded.'); break;
     }
     case 'brush-pause': { const points = main(1).points, peak = points.findIndex(q => q.pressure === .96);
       const near = q => Math.hypot(q.x - points[peak].x, q.y - points[peak].y) < 26;
       add('press-release-and-continue', peak > 0 && peak < points.length - 2 &&
         points.slice(0, peak).some(q => near(q) && q.pressure < .6) && points.slice(peak + 1).some(q => near(q) && q.pressure < .6) &&
-        documents.every((_, i) => main(i).options.duration === 3.6), 'A bounded press has release and continued travel; reveal duration is controlled.'); break; }
+        documents.every((_, i) => main(i).options.duration === 3.6), 'A bounded press has release and continued travel; reveal duration is controlled.');
+      add('authored-short-contact', [1, 2].every(i => {
+        const line = main(i), list = controls(line), center = list.find(c => c.pressure === 1), measured = distances(line.points),
+          index = line.points.findIndex(q => q.pressure === .96);
+        return center && Math.abs(center.at * measured.at(-1) - measured[index]) < 1e-8 &&
+          (list.at(-2).at - list[1].at) * measured.at(-1) <= 38.000001 &&
+          list.filter(c => c.inkLoad === 1).length === 1 && list.every(c => c.side <= .3) && line.options.width === 28;
+      }), 'Only the explicitly authored pause carries a bounded 38-unit contact/load window; noise corners are not classified as pauses.'); break; }
     case 'brush-reposition': { const points = main(1).points, dx = main(1).points.at(-1).x - points[0].x;
       add('bounded-local-retreat', points.some((q, i) => i > 0 && (q.x - points[i - 1].x) * dx < 0 && Math.hypot(q.x - points[i - 1].x, q.y - points[i - 1].y) < 12) &&
-        controls(main(2)).some(c => c.side > .6) && controls(main(2)).at(-1).side < .1, 'One short authored retreat is followed by forward travel and contact recovery.'); break; }
+        controls(main(2)).some(c => c.side > .4) && controls(main(2)).at(-1).side < .1, 'One short authored retreat is followed by forward travel and contact recovery.');
+      add('retreat-load-is-local', [1, 2].every(i => {
+        const line = main(i), list = controls(line), measured = distances(line.points), index = line.points.findIndex(q => q.pressure === .87),
+          center = list.find(c => c.pressure === 1);
+        return center && Math.abs(center.at * measured.at(-1) - measured[index]) < 1e-8 &&
+          (list.at(-2).at - list[1].at) * measured.at(-1) <= 38.000001 &&
+          list[0].inkLoad === .86 && list.at(-1).inkLoad === .86 && list.every(c => c.side <= .45);
+      }), 'Load is attached to the named exit of the short authored retreat, with unchanged contact outside its local window.'); break; }
     case 'brush-resistant': {
       add('steady-source-variable-contact', same(main(1).points, main(2).points) && turning(main(0).points) > turning(main(1).points) * 2 &&
         new Set(controls(main(1)).map(c => c.pressure)).size > 3 && documents.every((_, i) => main(i).options.dryness === .26),
@@ -527,7 +602,14 @@ export function auditRemainingBrush(study) {
       add('aperiodic-small-load', variableIntervals(controls(main(1))) && maxSegment(main(1).points) < 2.5 &&
         controls(main(1)).every(c => c.inkLoad > .9 && c.pressure > .78) &&
         main(1).points[0].x === main(0).points[0].x && main(1).points.at(-1).x === main(0).points.at(-1).x,
-      'Irregular load stations and dense continuous source keep resistance small and endpoints stable.'); break;
+      'Irregular load stations and dense continuous source keep resistance small and endpoints stable.');
+      const measured = distances(main(1).points), total = measured.at(-1), center = measured[namedStation(sourceValues(fineFlow), [281, 140])] / total,
+        original = controls(main(1)), changed = controls(main(2)), left = original.filter(c => c.at <= center - 15 / total).at(-1).at,
+        right = original.find(c => c.at >= center + 15 / total).at;
+      add('named-turn-window-only', (right - left) * total < 70 &&
+        changed.filter(c => c.at <= left || c.at >= right).every(c => same(c, original.find(q => q.at === c.at))) &&
+        changed.some(c => c.at === center && c.side > .2 && c.inkLoad > .97) && changed.every(c => c.side < .3),
+      'The extra load is confined between existing contact stations around the named authored turn; all outside controls are exact.'); break;
     }
     case 'brush-fast': add('send-with-continuous-release', documents.every((_, i) => main(i).options.duration === 1.1) && tail(main(1)) < .03 &&
       main(1).points.slice(-4).every((q, i, list) => i === 0 || q.pressure < list[i - 1].pressure) && pressurePeak(main(2)) > pressurePeak(main(1)), 'Same reveal time; multiple source stations release pressure after a controlled support.'); break;

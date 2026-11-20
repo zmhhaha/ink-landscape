@@ -4,6 +4,7 @@ import { sampleBrushContact } from './brush-contact.js';
 import type { BrushContactSample } from './brush-contact.js';
 import { createInkScene } from './core.js';
 import type { InkPoint, StrokeMark, Vec2 } from './types.js';
+import { accumulateEdge, getFractalNoise2D } from './natural.js';
 
 /** Stroke time belongs to its layer; pigment colour belongs to the process. */
 export interface InkStrokeSource {
@@ -25,6 +26,10 @@ export interface InkLayerSource {
   readonly mode?: 'glaze' | 'wet-mix';
   /** Opt-in inward contact feather, 0..1; omitted/0 preserves legacy coverage. */
   readonly edgeSoftness?: number;
+  /** Opt-in redistribution toward a broken inner margin, preserving layer mass. */
+  readonly edgeDeposit?: number;
+  /** Edge band as a fraction of local contact radius, 0..1; default .22. */
+  readonly edgeWidth?: number;
 }
 
 export interface InkProcessOptions {
@@ -46,6 +51,8 @@ export interface InkProcessLayer {
   readonly dryAfter: number;
   readonly mode: 'glaze' | 'wet-mix';
   readonly edgeSoftness?: number;
+  readonly edgeDeposit?: number;
+  readonly edgeWidth?: number;
 }
 
 /** Serializable compiled program; raster density is derived, never its source. */
@@ -104,7 +111,7 @@ const MAX_LAYERS = 32;
 const MAX_STROKES = 512;
 const MAX_SOURCE_POINTS = 4096;
 const MAX_CELLS = 262144;
-const layerFields = new Set(['id', 'strokes', 'concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness']);
+const layerFields = new Set(['id', 'strokes', 'concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness', 'edgeDeposit', 'edgeWidth']);
 const strokeFields = new Set(['points', 'options']);
 const strokeOptionFields = new Set(['id', 'width', 'opacity', 'dryness', 'smoothing', 'seed', 'clip',
   'axis', 'entry', 'finish', 'pressureProfile', 'turn', 'rhythm', 'drag', 'strength', 'controls', 'gestureModel']);
@@ -112,7 +119,7 @@ const processOptionFields = new Set(['width', 'height', 'seed', 'background', 'i
 const pointFields = new Set(['x', 'y', 'pressure']);
 const vectorFields = new Set(['x', 'y']);
 const controlFields = new Set(['at', 'pressure', 'side', 'angle', 'dryness', 'inkLoad']);
-const resultLayerFields = new Set(['id', 'marks', 'concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness']);
+const resultLayerFields = new Set(['id', 'marks', 'concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness', 'edgeDeposit', 'edgeWidth']);
 const markFields = new Set(['kind', 'id', 'points', 'width', 'ink', 'opacity', 'dryness', 'nib', 'smoothing',
   'tipAngle', 'seed', 'clip', 'start', 'duration', 'brush']);
 type CanonicalOptions = Required<InkProcessOptions>;
@@ -204,6 +211,8 @@ function layerState(source: Omit<InkLayerSource, 'strokes'>): Omit<InkProcessLay
     water: unit(source.water ?? .5, 'layer.water'), at: nonnegative(source.at ?? 0, 'layer.at'),
     dryAfter: nonnegative(source.dryAfter ?? 2, 'layer.dryAfter'), mode: mode(source.mode ?? 'glaze'),
     ...(source.edgeSoftness === undefined ? {} : { edgeSoftness: unit(source.edgeSoftness, 'layer.edgeSoftness') }),
+    ...(source.edgeDeposit === undefined ? {} : { edgeDeposit: unit(source.edgeDeposit, 'layer.edgeDeposit') }),
+    ...(source.edgeWidth === undefined ? {} : { edgeWidth: unit(source.edgeWidth, 'layer.edgeWidth') }),
   };
 }
 function copySourceOptions(source: InkStrokeSource, canonical: BrushProgramOptions): InkStrokeSource['options'] {
@@ -247,7 +256,7 @@ export function createInkProcessDocument(layers: readonly InkLayerSource[], opti
       marks.push(document.result);
     }
     const sparse: Record<string, unknown> = { id: state.id, strokes: Object.freeze(strokes) };
-    for (const key of ['concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness'] as const) if (source[key] !== undefined) sparse[key] = state[key];
+    for (const key of ['concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness', 'edgeDeposit', 'edgeWidth'] as const) if (source[key] !== undefined) sparse[key] = state[key];
     authored.push(Object.freeze(sparse) as unknown as InkLayerSource);
     compiled.push(Object.freeze({ ...state, marks: Object.freeze(marks) }));
   }
@@ -315,6 +324,8 @@ function validateProcess(process: InkProcess): boolean {
       dryAfter: nonnegative(layer.dryAfter, 'layer.dryAfter'), mode: mode(layer.mode),
     };
     if (layer.edgeSoftness !== undefined) unit(layer.edgeSoftness, 'layer.edgeSoftness');
+    if (layer.edgeDeposit !== undefined) unit(layer.edgeDeposit, 'layer.edgeDeposit');
+    if (layer.edgeWidth !== undefined) unit(layer.edgeWidth, 'layer.edgeWidth');
     if (ids.has(state.id)) throw new RangeError(`Duplicate ink layer id: ${state.id}`);
     ids.add(state.id);
     if (state.at < previous) throw new RangeError('Ink layer times must be nondecreasing');
@@ -348,7 +359,7 @@ function inside(x: number, y: number, polygon: readonly Vec2[]): boolean {
   }
   return contained;
 }
-function rasterStroke(mark: StrokeMark, columns: number, rows: number, cellSize: number, paperSeed: number, edgeSoftness = 0): Float32Array {
+function rasterStroke(mark: StrokeMark, columns: number, rows: number, cellSize: number, paperSeed: number, edgeSoftness = 0, interior?: Float32Array): Float32Array {
   const result = new Float32Array(columns * rows);
   const nearest = new Float64Array(result.length); nearest.fill(Infinity);
   const marginAt = new Float64Array(result.length); marginAt.fill(-Infinity);
@@ -414,6 +425,7 @@ function rasterStroke(mark: StrokeMark, columns: number, rows: number, cellSize:
     const edge = Math.min(result[i]!, clamp((marginAt[i]! - erosion) / cellSize + .5));
     const body = .72 + .28 * noise(paperSeed ^ 0x13957823, px * .17, py * .23);
     result[i] = edge * load * mark.opacity * body * (solid + (1 - solid) * broken);
+    if (interior && result[i]! > 0) interior[i] = Math.max(interior[i]!, clamp((marginAt[i]! - erosion) / Math.max(cellSize, widthAt[i]!)));
     if (edgeSoftness > 0) {
       // Feather inside the owned contact instead of blurring a final bitmap.
       // The same finite mask drives pigment and wet exchange; old layers retain
@@ -430,9 +442,30 @@ function prepareMasks(process: InkProcess, columns: number, rows: number, cellSi
   if (cached) return cached;
   const layers = process.layers.map(layer => {
     const coverage = new Float32Array(columns * rows);
+    const deposit = layer.edgeDeposit ?? 0, bandWidth = layer.edgeWidth ?? .22;
+    const interior = deposit > 0 && bandWidth > 0 ? new Float32Array(coverage.length) : undefined;
     for (const mark of layer.marks) {
-      const contact = rasterStroke(mark, columns, rows, cellSize, process.seed, layer.edgeSoftness ?? 0);
+      const contact = rasterStroke(mark, columns, rows, cellSize, process.seed, layer.edgeSoftness ?? 0, interior);
       for (let i = 0; i < contact.length; i++) coverage[i] = coverage[i]! + contact[i]!;
+    }
+    if (interior) {
+      const seed = process.seed ^ hashText(layer.id);
+      const weights = new Float32Array(coverage.length);
+      let mass = 0, weightedMass = 0;
+      for (let i = 0; i < coverage.length; i++) {
+        const contact = coverage[i]!;
+        if (contact <= 0) continue;
+        const x = (i % columns + .5) * cellSize, y = (Math.floor(i / columns) + .5) * cellSize;
+        const field = getFractalNoise2D(x / 19 + 7.173, y / 23 + 11.317, seed, 3);
+        const depth = clamp(interior[i]! / (.88 + field * .27));
+        const gate = clamp(.48 + field * 1.1);
+        weights[i] = 1 + deposit * 4 * accumulateEdge(depth, bandWidth) * gate;
+        mass += contact; weightedMass += contact * weights[i]!;
+      }
+      // Redistribute authored layer coverage; neither a water event nor this
+      // edge preference creates pigment. Fully overlapped interiors stay quiet.
+      const normalization = weightedMass > 0 ? mass / weightedMass : 1;
+      for (let i = 0; i < coverage.length; i++) if (coverage[i]! > 0) coverage[i] = coverage[i]! * weights[i]! * normalization;
     }
     return coverage;
   });

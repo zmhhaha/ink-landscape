@@ -1,4 +1,4 @@
-import { createBrushDocument, reviseBrushDocument, createInkScene } from '../dist/index.js';
+import { createBrushDocument, reviseBrushDocument, createInkScene, createNoise1D } from '../dist/index.js';
 
 export const gestureInputs = Object.freeze({ seed: 261120, pathVariant: 'curve', strength: .9, side: .8, tailDryness: .72 });
 export const gestureSize = Object.freeze({ width: 560, height: 240, background: '#f5f2e9' });
@@ -31,39 +31,75 @@ function validate(inputs) {
   }
 }
 
+const pathLength = points => points.slice(1).reduce((sum, point, i) =>
+  sum + Math.hypot(point.x - points[i].x, point.y - points[i].y), 0);
+const mergeControls = (...channels) => [...new Set(channels.flatMap(channel => channel.map(control => control.at)))]
+  .sort((a, b) => a - b).map(at => Object.assign({ at },
+    ...channels.flatMap(channel => channel.filter(control => control.at === at))));
+const turnPulse = (distance, center) => {
+  const u = Math.max(0, 1 - Math.abs(distance - center) / 18);
+  return u * u * (3 - 2 * u);
+};
+
+// The pulse belongs to one explicitly selected authored turn. A material
+// fluctuation cannot manufacture a pause through an angular threshold.
+function contactVariation(seed, turnPath, turnIndex) {
+  const noise = createNoise1D(seed ^ 0x4c2e71), total = turnPath ? pathLength(turnPath) : 440,
+    center = turnPath ? pathLength(turnPath.slice(0, turnIndex + 1)) : -100;
+  const positions = [0];
+  let distance = 0, index = 0;
+  while ((distance += 13 + (noise(++index * 1.91 + .73) + 1) * 7) < total - 5) positions.push(distance / total);
+  positions.push(1);
+  if (turnPath) for (const delta of [-18, -10, -4, 0, 5, 12, 18]) positions.push((center + delta) / total);
+  return [...new Set(positions)].sort((a, b) => a - b).map(at => {
+    const d = at * total, pulse = turnPath ? turnPulse(d, center) : 0,
+      endContact = .35 + .65 * Math.max(Math.max(0, 1 - at / .16), Math.max(0, (at - .82) / .18));
+    return { at, pressure: Math.min(1, .945 + noise(d / 14.9 + .37) * .025 * endContact + pulse * .048),
+      inkLoad: Math.min(1, .91 + noise(d / 21.7 + 3.19) * .042 + pulse * .075),
+      angle: Math.PI / 2 + noise(d / 10.3 + 7.31) * .045 * endContact,
+      ...(turnPath ? { side: .035 + pulse * .08 } : {}) };
+  });
+}
+
 export function makeGestureStudies(options = {}) {
   const inputs = { ...gestureInputs, ...options }; validate(inputs);
   const path = gesturePath(inputs.pathVariant);
+  const material = contactVariation(inputs.seed);
   const common = { id: 'gesture-stroke', seed: inputs.seed, width: 34, ink: '#20251f', opacity: .94,
     dryness: .20, smoothing: inputs.pathVariant === 'corner' ? 'linear' : 'catmull-rom',
-    gestureModel: 'local-v1', strength: inputs.strength, start: 0, duration: 2 };
+    gestureModel: 'local-v1', strength: inputs.strength, start: 0, duration: 2, controls: material };
   const variant = (id, label, document) => ({ id, label, document, scene: gestureScene([document], inputs.seed) });
   const plain = createBrushDocument(path, common);
   const exposed = reviseBrushDocument(plain, { options: { entry: 'exposed' } });
   const concealed = reviseBrushDocument(plain, { options: { entry: 'concealed' } });
   const open = reviseBrushDocument(plain, { options: { finish: 'open' } });
   const returned = reviseBrushDocument(plain, { options: { finish: 'return' } });
-  const corner = createBrushDocument(gesturePath(inputs.pathVariant, true), { ...common, smoothing: 'linear', turn: 'angular' });
+  const turnPath = gesturePath(inputs.pathVariant, true), turnIndex = inputs.pathVariant === 'straight' ? 1 : 2,
+    turnMaterial = contactVariation(inputs.seed, turnPath, turnIndex), turnCenter = pathLength(turnPath.slice(0, turnIndex + 1)),
+    turnLength = pathLength(turnPath);
+  const corner = createBrushDocument(turnPath, { ...common, smoothing: 'linear', turn: 'angular', controls: turnMaterial });
   const round = reviseBrushDocument(corner, { options: { turn: 'round' } });
   const sideEntry = [{ at: 0, side: inputs.side }, { at: .16, side: inputs.side }, { at: .4, side: 0 }, { at: 1, side: 0 }];
-  const turnControl = [{ at: 0, side: 0, angle: Math.PI / 2 }, { at: .28, side: inputs.side, angle: Math.PI * .35 },
-    { at: .58, side: inputs.side * .35, angle: Math.PI * .65 }, { at: 1, side: 0, angle: Math.PI / 2 }];
+  const turnControl = turnMaterial.map(control => {
+    const pulse = turnPulse(control.at * turnLength, turnCenter);
+    return { ...control, side: control.side + inputs.side * .5 * pulse, angle: control.angle + .18 * pulse };
+  });
   return [
     { id: 'entry', title: '04 · 起笔', variable: '先比较露入与逆入，再在同一逆入动作上叠加偏侧接触。',
       criteria: '放大起端并打开笔路：观察由细入实、逆向进入后折回，以及起端接触展开。主体路径和墨色保持一致。',
       limits: '露入是起端压力变化，逆入是短程折返；它们不是给两种线条换笔帽。尚不模拟毫束藏锋、驻笔或具体书体笔顺。',
       techniqueIds: ['brush-exposed-entry', 'brush-hidden-entry', 'brush-side'],
       variants: [variant('baseline', '对照 · 露入', exposed), variant('variable', '变化 · 逆入后行', concealed),
-        variant('combined', '组合 · 逆入 + 偏侧展开', reviseBrushDocument(concealed, { options: { controls: sideEntry } }))] },
+        variant('combined', '组合 · 逆入 + 偏侧展开', reviseBrushDocument(concealed, { options: { controls: mergeControls(material, sideEntry) } }))] },
     { id: 'finish', title: '05 · 收笔', variable: '只替换收笔方式，分别观察原收、提收与回行；三列是收法对照。',
       criteria: '观察末端提起的收束、回入笔画内部的行迹，以及动作是否局限于尾段。原收保留作者给定的压力。',
       limits: '提收通过尾段压力减小表达；回行通过末段折返表达。当前回收不等同所有传统回锋，时间显露不模拟真实提笔速度。',
       techniqueIds: ['brush-exposed-finish', 'brush-return-finish'],
       variants: [variant('baseline', '基线 · 保留原收', plain), variant('variable', '变化 · 提收出锋', open),
         variant('combined', '对照 · 回行收束', returned)] },
-    { id: 'turn', title: '06 · 转折与换向', variable: '先比较保折与圆转，再在相同圆转笔路上增加局部接触朝向变化。',
+    { id: 'turn', title: '06 · 转折与换向', variable: '先比较保折与圆转；只在指定作者转点短促增负，再在同一圆转上增加局部换锋。',
       criteria: '观察角点是否保留、圆转是否过度膨胀，以及换锋后接触区与锋尖的关系。三种布局均保留实际折向供比较。',
-      limits: '圆转只替换角点附近的一段笔路，保留远处长直段；局部接触朝向是可编辑近似，尚不模拟毫束翻转、顿驻和调锋全过程。',
+      limits: '每个布局只选一个作者转点施加18单位半径内的接触脉冲，不用噪声角或通用角度阈值认定顿笔。圆转及局部接触仍是可编辑近似，不模拟毫束翻转、驻笔沉积或完整调锋。',
       techniqueIds: ['brush-turn', 'brush-fold', 'brush-center', 'brush-side'],
       variants: [variant('baseline', '对照 · 保角与局部提按', corner), variant('variable', '变化 · 圆转笔路', round),
         variant('combined', '组合 · 圆转 + 局部换锋', reviseBrushDocument(round, { options: { controls: turnControl } }))] },
