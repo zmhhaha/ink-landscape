@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>芥子园画谱 · 选读与笔组研究</title>
+<link rel="stylesheet" href="./jieziyuan-study.css">
+<main>
+  <header>
+    <p class="eyebrow">原书选读 · 结构观察 · 可编辑笔组</p>
+    <h1>芥子园画谱 · 从图版读笔法</h1>
+    <p>本轮只选读三个局部，把图文中的组织关系转译为代码笔组，再换一种形体检查。所画是原创程序研究，没有加载原书像素，也不表示已经通读全书或复原传统笔法。</p>
+  </header>
+  <div class="toolbar" aria-label="导出和核验">
+    <button id="save-png" disabled>保存三项对照图</button>
+    <button id="save-source" disabled>保存全部编辑源</button>
+    <button id="check-replay" disabled>检查全部重建</button>
+    <span id="status" role="status" aria-live="polite">正在准备选读对照…</span>
+  </div>
+  <section id="gallery" aria-label="图版组织与换形对照"></section>
+  <details id="source-editor">
+    <summary>编辑一项的逐笔源</summary>
+    <label for="case-select">选择样片</label>
+    <select id="case-select" disabled></select>
+    <label for="recipe-source">图式转译列 · 配方 JSON</label>
+    <textarea id="recipe-source" spellcheck="false" disabled></textarea>
+    <div class="toolbar">
+      <button id="apply-source" disabled>重绘所选样片</button>
+      <button id="restore-source" disabled>还原所选样片</button>
+      <span id="edit-status" role="status" aria-live="polite"></span>
+    </div>
+    <p class="note">编辑只改变这一列的普通笔组配方；原书出处与观察记录继续保留。恢复后可继续比较控制组和换形结果。</p>
+  </details>
+  <footer>
+    <p>图版的刻印边缘不直接等同毛笔毛边；书目、原文释读、程序假设和艺术评价分别记录。</p>
+    <a href="./index.html">返回笔墨试验台</a>
+  </footer>
+</main>
+<script type="module" src="./jieziyuan-study.mjs"></script>
+</html>

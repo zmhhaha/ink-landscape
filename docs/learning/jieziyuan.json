@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "id": "jieziyuan-selected-reading-20261120",
+  "accessed": "2026-11-20",
+  "scope": "树法、叶法、皴法、三远、泉水公开选页；重点阅读公开图1至8。未通读全书。",
+  "editionStatus": "以画雅集（Yihua）为二次分发；所称普林斯顿藏本未独立核验。央美初编1679标签与Smithsonian DOI书目1868不混为同一印本。",
+  "sources": [
+    {
+      "id": "cafa-record",
+      "url": "https://i.cafa.edu.cn/waterprint/ch/chancieb/?ai=300002",
+      "read": "机构文章与目录；石分三面仅为文章转引，未核原页",
+      "kind": "institutional-commentary"
+    },
+    {
+      "id": "smithsonian-record",
+      "url": "https://library.si.edu/digital-library/book/kaishien-gaden",
+      "read": "机构目录与分册元数据，未读Internet Archive内页",
+      "kind": "catalog"
+    },
+    {
+      "id": "smithsonian-doi",
+      "url": "https://api.crossref.org/works/10.5479/sil.890900.39088019222223",
+      "read": "published-print和issued记录1868，未核原书牌记",
+      "kind": "catalog-metadata"
+    },
+    {
+      "id": "yihua-public-previews",
+      "url": "https://yihua.art/jie-zi-yuan-hua-zhuan-quan-ji.html",
+      "read": "HTML实际列出初集16张公开选图；重点查看1至8，未读完整PDF",
+      "kind": "historical-facsimile-secondary-delivery"
+    }
+  ],
+  "plates": [
+    {
+      "id": "tree-two-three",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-1.jpg",
+      "locator": "右页二株畫法，左页三株畫法；未核印刷页码",
+      "readableExcerpts": ["老樹須婆娑多情", "幼樹須窈窕有致", "互相顧盼", "必須左右互讓", "穿插自然"],
+      "observation": "主副树的根位、顶高、枝势有差；粗干勾线留白，细枝转单线。",
+      "hypothesis": "显式主副、交分、前后笔序；用现有Bark勾干和单线细梢。",
+      "studyId": "unequal-grove"
+    },
+    {
+      "id": "leaf-types",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-2.jpg",
+      "locator": "菊花点、垂藤点、水藻点、松叶点、大混点、尖头点图式",
+      "observation": "点形、团块轴向与团间露枝共同变化。",
+      "hypothesis": "单点材质、点群组织和附着关系分开编辑。",
+      "studyId": "leaf-openings"
+    },
+    {
+      "id": "tree-knots",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-3.jpg",
+      "locator": "树法图，重点观察左页大树，不转录小字",
+      "observation": "干内留白，木结和点簇局部聚积而非全干撒点。",
+      "hypothesis": "按叉口、枝径和结位组织已有木结点皴。",
+      "implementation": "pending-comparison"
+    },
+    {
+      "id": "willow",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-4.jpg",
+      "locator": "右点叶柳，左秋柳",
+      "observation": "枝叶共享下垂方向，稀密与露枝有别。",
+      "hypothesis": "同一枝轴约束枝与叶，不随机贴叶。",
+      "implementation": "pending-comparison"
+    },
+    {
+      "id": "axe-jiesuo",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-5.jpg",
+      "locator": "左大斧劈法，右解索皴法",
+      "readableExcerpts": ["大斧劈法", "馬遠夏圭多爲之", "解索皴法"],
+      "observation": "宽削面和曲折长线的结构分工不同，均有局部重墨及开放空面。",
+      "hypothesis": "先定分面与裂隙，再用现有不同皴触随形组织；本轮石例的pima为作者选择。",
+      "studyId": "rock-faces"
+    },
+    {
+      "id": "three-distances",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-6.jpg",
+      "locator": "山论三远法；高远法、深远法图",
+      "readableExcerpts": ["自下而仰其巔曰高遠", "自前而窺其後曰深遠", "自近而望及遠曰平遠"],
+      "observation": "脊线遮挡与云水留白建立空间。",
+      "hypothesis": "构图源显式保存遮挡次序和白色通道。",
+      "implementation": "pending-comparison"
+    },
+    {
+      "id": "mi",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-7.jpg",
+      "locator": "左页米法；右页题签本轮不作归属依据",
+      "readableExcerpts": ["米法"],
+      "observation": "大小短横触高低相搭，主簇、副点和露纸共同成山。",
+      "hypothesis": "在既有米点上研究点群和叠触，不能据印本设定真实水墨参数。",
+      "implementation": "pending-comparison"
+    },
+    {
+      "id": "spring-water",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-8.jpg",
+      "locator": "泉水图式，观察水道与两侧岩壁",
+      "observation": "留白水道为主体，两侧断线和底部散点分工。",
+      "hypothesis": "先给留白水道，再约束皴线；与用水物理分开。",
+      "implementation": "pending-comparison"
+    }
+  ],
+  "study": {
+    "url": "../../examples/jieziyuan-study.html",
+    "fixtures": "../../examples/jieziyuan-study-fixtures.mjs",
+    "ids": ["unequal-grove", "rock-faces", "leaf-openings"],
+    "views": 12,
+    "source": "ordinary editable StrokeGroupDocument recipes; no reference pixels",
+    "control": "本轮作者均匀控制组，不冒充旧版本截图；多个变量同时改变，不声称单变量因果",
+    "artisticStatus": "unreviewed"
+  },
+  "limits": [
+    "木刻颗粒不是真实宣纸或笔毫的物理测量。",
+    "成图不能唯一确定笔序、腕法、含水或墨量。",
+    "阅读证据、工程实现、用户艺术评价分别记录。"
+  ]
+}

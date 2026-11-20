@@ -259,6 +259,36 @@
       "kind": "teaching",
       "scope": "已读公开文档简介/OCR正文，其中明确列“树及树叶形态：品字点叶、介字点叶、夹叶法”，并再次出现“品字点叶”。课件署上传人x***、2022-09-29、17页；未获原作者/学校，不将平台认证当学术审校。仅页面首5页图可见，未实际查看含该词的叶式图页。",
       "supports": "证明公开教学中确有“品字点叶”命名；不支持固定三笔次序、严格点数或与攒三聚五同义。"
+    },
+    {
+      "id": "jieziyuan-yihua-leaf-preview",
+      "title": "《芥子园画传》点叶图公开预览：菊花点、松叶点、尖头点等",
+      "institution": "以画雅集（Yihua）（二次分发预览；其所述普林斯顿藏本归属未独立核验）",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-2.jpg",
+      "accessed": "2026-11-20",
+      "kind": "historical-facsimile",
+      "scope": "实际查看跨页图：右页上部“菊花點”、右页下部“松葉點”、左页下部“尖頭點”的图题与叶组；观察沿枝成团、各团大小与团间留空。本轮未独立核验网站所述普林斯顿大学图书馆底本归属、具体刊年与藏号；不把纸黄、水渍和木刻颗粒当作毛笔或宣纸物性的证据。",
+      "supports": "支持具名点叶结果图、叶群与枝架的联系及组间纸白；静态印版不能证明统一笔顺、接触压力或真实毛边。"
+    },
+    {
+      "id": "jieziyuan-yihua-axe-jiesuo-preview",
+      "title": "《芥子园画传》大斧劈法与解索皴法图公开预览",
+      "institution": "以画雅集（Yihua）（二次分发预览；其所述普林斯顿藏本归属未独立核验）",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-5.jpg",
+      "accessed": "2026-11-20",
+      "kind": "historical-facsimile",
+      "scope": "实际查看跨页图：左页“大斧劈法”的宽阔角面、长削切形与局部深墨，右页“解索皴法”的长曲折纹分组、石面转折与明面。本轮未独立核验网站所述普林斯顿大学图书馆底本归属、具体刊年与藏号；不把纸黄、水渍和木刻颗粒当作毛笔或宣纸物性的证据。",
+      "supports": "支持两类皴纹服务石面构形的可见实例；不从木刻断裂推定具体腕法、运行速度或含水参数。"
+    },
+    {
+      "id": "jieziyuan-yihua-mi-preview",
+      "title": "《芥子园画传》米法图公开预览（左页）",
+      "institution": "以画雅集（Yihua）（二次分发预览；其所述普林斯顿藏本归属未独立核验）",
+      "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-7.jpg",
+      "accessed": "2026-11-20",
+      "kind": "historical-facsimile",
+      "scope": "实际查看跨页图左页米法的短横墨痕、交错叠组、深浅块与其间留白；右页不作为本轮题签或技法归属的证据。本轮未独立核验网站所述普林斯顿大学图书馆底本归属、具体刊年与藏号；不把纸黄、水渍和木刻颗粒当作毛笔或宣纸物性的证据。",
+      "supports": "补充横向短触交错、局部积叠成组的结果图；静态版画不直接支持湿态时序、毛细过程或水墨剂量。"
     }
   ],
   "entries": [
@@ -307,6 +337,12 @@
           "locator": "“斧劈皴”段的大小、按踢挑拖说明",
           "support": "definition",
           "note": ""
+        },
+        {
+          "sourceId": "jieziyuan-yihua-axe-jiesuo-preview",
+          "locator": "jzycjwjkx-5.jpg：左页题“大斧劈法”的石体图",
+          "support": "example",
+          "note": "可见较宽阔的角面、长短削切形与折角处的重墨片，浅面和纸白仍成片保留。此图支持按石面转折安排宽狭与疏密；不将刻印缺口解释为某种手腕动作或干笔物理。"
         }
       ]
     },
@@ -361,6 +397,12 @@
           "locator": "“解索皴”段与王蒙作品说明",
           "support": "definition",
           "note": ""
+        },
+        {
+          "sourceId": "jieziyuan-yihua-axe-jiesuo-preview",
+          "locator": "jzycjwjkx-5.jpg：右页题“解索皴法”的石体图",
+          "support": "example",
+          "note": "长曲折纹在不同石面中分组下行，线群有长短停断，并与较空的面及轮廓交替。此处支持受形体约束的屈曲组织，不以印版线条证明唯一中锋轨迹或规定整面等密排线。"
         }
       ]
     },
@@ -535,6 +577,12 @@
           "locator": "“米点皴”段“不可太模糊或太明露”",
           "support": "definition",
           "note": ""
+        },
+        {
+          "sourceId": "jieziyuan-yihua-mi-preview",
+          "locator": "jzycjwjkx-7.jpg：左页米法图的横向短痕与叠组",
+          "support": "example",
+          "note": "短横墨痕大小和间距不齐，局部叠合为深块，组间仍留纸白并与较细长线相接。只补横触成组的可见结果；含水与先后另依已有文献，不能从木刻黑白直接推断湿态交换。右页不纳入该条证据。"
         }
       ]
     },
@@ -697,6 +745,12 @@
           "locator": "“杂树法”及“点叶法”转录",
           "support": "definition",
           "note": "平台转录未校原刻。"
+        },
+        {
+          "sourceId": "jieziyuan-yihua-leaf-preview",
+          "locator": "jzycjwjkx-2.jpg：右页上部“菊花點”、左页下部“尖頭點”及其叶簇",
+          "support": "example",
+          "note": "图中放射状小叶组与实心尖点各自沿枝聚成团，团与团之间留有纸白。此处仅补点叶结果的变化与枝架关系；不新增菊花点或尖头点目录，也不从静态图指定点数、笔序。"
         }
       ]
     },
@@ -883,6 +937,12 @@
           "locator": "全文刺绣语境",
           "support": "mentioned",
           "note": "只排除错误命中，不支持绘画针序。"
+        },
+        {
+          "sourceId": "jieziyuan-yihua-leaf-preview",
+          "locator": "jzycjwjkx-2.jpg：右页下部题“松葉點”的枝叶图",
+          "support": "example",
+          "note": "细长叶痕沿数条斜枝两侧交错，枝与枝之间有疏空；只补此图的叶形与附枝组织。图题为松叶点，不据此裁定所有松针、松叶点与刺松同式，也不推定统一落针方向。"
         }
       ]
     },
