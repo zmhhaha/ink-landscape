@@ -1,4 +1,4 @@
-import { createStrokeGroupDocument } from '../dist/index.js';
+import { createStrokeGroupDocument, jitterPath, varyPressure } from '../dist/index.js';
 import { authoredPathTexture } from './authored-study-path.mjs';
 
 const size = Object.freeze({ width: 560, height: 260, background: '#f5f2e9', ink: '#252820' });
@@ -99,15 +99,84 @@ const profile = (kind, t, i) => {
 };
 const sourceLength = points => points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0);
 
+const shapingKinds = new Set(['mixed', 'plain', 'sparse']);
+const authorSeed = key => {
+  let value = 2166136261;
+  for (const character of key) value = Math.imul(value ^ character.charCodeAt(0), 16777619);
+  return value >>> 0;
+};
+function envelope(knots, t) {
+  let right = 1;
+  while (right < knots.length - 1 && knots[right][0] < t) right++;
+  const [a, b] = [knots[right - 1], knots[right]], u = (t - a[0]) / (b[0] - a[0]);
+  return mix(a[1], b[1], u * u * (3 - 2 * u));
+}
+function arcPositions(points) {
+  const distances = [0];
+  for (let i = 1; i < points.length; i++) distances.push(distances.at(-1) + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+  return distances;
+}
+
+// These are explicit authoring decisions for 64–66. Both smooth release and
+// resistant/pressed passages become ordinary editable samples, before render.
+function shapingCurve(points, kind, layout, i, count) {
+  const distances = arcPositions(points), total = distances.at(-1);
+  const parentEnd = i === 1 || i === count - 2 ? .46 : 1;
+  const parentSource = portion(points, 0, parentEnd);
+  const anchor = parentSource[Math.max(1, Math.floor((parentSource.length - 1) * .45))];
+  const pinned = points.findIndex(p => near(p, anchor));
+  const rough = jitterPath(points, kind === 'sparse' ? .9 : kind === 'mixed' ? .72 : .62, {
+    seed: authorSeed(`cloth-shaping/${kind}/${layout}/${i}`), wavelength: 9.5, tangentRatio: .12, preserveEndpoints: true,
+  });
+  return points.map((p, j) => {
+    const t = distances[j] / total;
+    const resistance = envelope([[0, 0], [.15, .08], [.29, .9], [.42, 1], [.53, .12], [.64, .08], [.76, .8], [.87, .18], [1, 0]], t);
+    const anchorDistance = pinned < 0 ? 1 : Math.min(1, Math.abs(distances[j] - distances[pinned]) / 10);
+    const amount = resistance * anchorDistance * anchorDistance * (3 - 2 * anchorDistance);
+    return { x: p.x + (rough[j].x - p.x) * amount, y: p.y + (rough[j].y - p.y) * amount };
+  });
+}
+
+function shapingPressure(points, kind, key) {
+  const seed = authorSeed(key), distances = arcPositions(points), total = distances.at(-1);
+  const shift = ((seed % 11) / 10 - .5) * .05;
+  const firstPress = .32 + shift, secondPress = .72 - shift;
+  const strong = kind === 'sparse' ? .99 : kind === 'mixed' ? .94 : .92;
+  const knots = [[0, .27], [.075, .79], [.2, .6], [firstPress, strong], [firstPress + .07, strong * .94],
+    [.5, .31], [.61, .55], [secondPress, strong * .94], [.84, .45], [.94, .19], [1, .07]];
+  // Insert only authored pressure events, preserving every original vertex.
+  // jitterPath itself does not resample, and shared parent nodes remain exact.
+  const positions = [...new Set([...distances, ...knots.map(([t]) => t * total)])].sort((a, b) => a - b);
+  let segment = 1;
+  return positions.map(distance => {
+    while (segment < points.length - 1 && distances[segment] < distance) segment++;
+    const from = points[segment - 1], to = points[segment], span = distances[segment] - distances[segment - 1];
+    const t = (distance - distances[segment - 1]) / span;
+    const original = t === 0 ? from : t === 1 ? to : { x: mix(from.x, to.x, t), y: mix(from.y, to.y, t),
+      pressure: mix(from.pressure ?? 1, to.pressure ?? 1, t) };
+    const pressure = original.pressure === 0 ? 0 : varyPressure(envelope(knots, distance / total), .065,
+      { seed, at: distance, wavelength: 13 });
+    return { x: original.x, y: original.y, pressure };
+  });
+}
+
+function shapingControls(controls = []) {
+  const values = new Map(controls.map(control => [control.at, { ...control }]));
+  for (const [at, dryness] of [[0, .24], [.27, .43], [.41, .56], [.53, .17], [.67, .22], [.76, .48], [.88, .26], [1, .29]]) {
+    values.set(at, { ...values.get(at), at, dryness });
+  }
+  return [...values.values()].sort((a, b) => a.at - b.at);
+}
+
 const definitions = [
-  { id: 'hun', title: '混描候选', ids: ['line-hun'], kind: 'mixed', width: 3.2,
-    feature: '淡线先定褶骨，再只在受力和背折处浓墨醒线，末列另用淡宽笔接成局部墨面。',
+  { id: 'hun', title: '混描候选', ids: ['line-hun'], kind: 'mixed', width: 4.5,
+    feature: '淡线以起按、行提、局部按顿和提收定褶骨，再只在受力和背折处浓墨醒线；顺滑段与涩阻段相间，末列淡宽笔接成局部墨面。',
     limits: '部分支持：采用现代教学的淡勾、浓醒与线面衔接解释；古诀短注未校定，不将本候选视为完整传统混描。' },
-  { id: 'baimiao', title: '白描', ids: ['line-baimiao'], kind: 'plain', width: 2.8,
-    feature: '同一布褶只以墨线交代支撑、重力和前后；主线承力，次线轻收，空白保留体面。',
+  { id: 'baimiao', title: '白描', ids: ['line-baimiao'], kind: 'plain', width: 4.2,
+    feature: '同一布褶只以墨线交代支撑、重力和前后；主线的起按、中段顿挫与提收可编辑，连贯段与局部涩阻相间，次线轻收而留空。',
     limits: '明确支持墨线造形且不施彩色；这是原创布褶替代物的造形研究，不代表所有人物、花鸟白描。' },
-  { id: 'jianbi', title: '减笔描', ids: ['line-jianbi'], kind: 'sparse', width: 5.7,
-    feature: '按作者判断保留两端支撑、中心垂势和转面，仅省略次要褶线；组合列以少量辅笔接合姿态。',
+  { id: 'jianbi', title: '减笔描', ids: ['line-jianbi'], kind: 'sparse', width: 7.3,
+    feature: '保留两端支撑、中心垂势和转面，以较宽笔明确起按、两次局部承压及提收；只省略次褶，组合列用少量辅笔接合姿态。',
     limits: '明确支持疏体和概括对象；省略由作者指定，不由随机删笔、采样稀疏或加速播放决定，艺术可读性待评。' },
   { id: 'yousi', title: '高古游丝描', ids: ['line-gaogu-yousi'], kind: 'thread', width: 1.9,
     feature: '细而连贯的中锋沿长弯承接，小幅提按保持圆匀；末列在拉紧与垂落处安排细密和空隙。',
@@ -178,6 +247,7 @@ function geometry(definition, drape, layout) {
     if (kind === 'tremor') points = authoredPathTexture(points.map(p => [p.x, p.y, 1]), `cloth-${layout}-${i}`, {
       step: 3.4, amplitude: .95,
     }).map(([x, y]) => ({ x, y }));
+    if (shapingKinds.has(kind)) points = shapingCurve(points, kind, layout, i, fans.length);
     return points;
   });
 }
@@ -187,11 +257,17 @@ function makeDocument(definition, { seed, layout }, stage) {
   if (cache.has(key)) return cache.get(key);
   const drape = drapes[layout], kind = definition.kind, groups = [];
   let order = 0;
-  const stroke = (id, points, width, options = {}) => ({ id, points,
-    options: { width, opacity: .76, dryness: .24, smoothing: 'linear', entry: 'preserve', finish: 'preserve',
-      pressureProfile: 'preserve', turn: 'preserve', start: order++ * .055, duration: .38, ...options } });
+  const shaping = stage > 0 && shapingKinds.has(kind);
+  const stroke = (id, points, width, options = {}) => {
+    const position = order++;
+    return { id, points: shaping ? shapingPressure(points, kind, `${kind}/${layout}/${position}/${id}`) : points,
+      options: { width, opacity: .76, dryness: .24, smoothing: 'linear', entry: 'preserve', finish: 'preserve',
+        pressureProfile: 'preserve', turn: 'preserve', start: position * .055, duration: .38, ...options,
+        ...(shaping ? { controls: shapingControls(options.controls) } : {}) } };
+  };
   const outlines = drape.edges.map((edge, i) => stroke(`edge-${i}`, edge.map((p, j) => point(p, [.4, .7, .55, .6, .3][j])),
-    kind === 'sparse' && stage > 0 ? 2.5 : 1.65, { opacity: stage === 0 ? .38 : stage === 1 ? .52 : .62, smoothing: 'catmull-rom' }));
+    shaping ? kind === 'sparse' ? 3.6 : 2.9 : kind === 'sparse' && stage > 0 ? 2.5 : 1.65,
+    { opacity: stage === 0 ? .38 : stage === 1 ? .52 : .62, smoothing: 'catmull-rom' }));
   // Small support contacts belong to the object, not UI labels or hidden pins.
   for (const [i, p] of drape.supports.entries()) outlines.push(stroke(`support-${i}`,
     [point(p, .7), point([p[0] + 2.2, p[1] + 2.8], 1), point([p[0] + 3.5, p[1] + 4], .2)], 3.4, { opacity: .76 }));
@@ -230,7 +306,10 @@ function makeDocument(definition, { seed, layout }, stage) {
       const selected = kind === 'sparse' || kind === 'dry' ? [0, 2] : [0, 2, 4, 6];
       for (const n of selected.filter(n => n < parents.length)) {
         const parent = parents[n], source = parent.strokes[0].points;
-        const root = source[Math.max(1, Math.floor((source.length - 1) * .45))], tail = source.at(-1);
+        const originalParent = shaping ? portion(curves[n], 0, rearIndices.includes(n) ? .46 : 1) : undefined;
+        const anchor = originalParent?.[Math.max(1, Math.floor((originalParent.length - 1) * .45))];
+        const root = anchor ? source.find(p => near(p, anchor)) : source[Math.max(1, Math.floor((source.length - 1) * .45))];
+        const tail = source.at(-1);
         const dx = tail.x - root.x, dy = tail.y - root.y, length = Math.hypot(dx, dy) || 1;
         const tip = { x: root.x + dx * .64 - dy / length * 11, y: root.y + dy * .64 + dx / length * 11 };
         groups.push({ id: `secondary-${n}`, role: 'mark', parentId: parent.id, strokes: [stroke('minor',
@@ -243,7 +322,7 @@ function makeDocument(definition, { seed, layout }, stage) {
       for (const i of stage === 1 ? [1, 4] : [0, 3, 5]) groups.push({ id: `awake-${i}`, role: 'mark', parentId: `fold-${i}`,
         strokes: [stroke('wake', portion(curves[i], .08, rearIndices.includes(i) ? .42 : .79)
           .map((p, j, list) => ({ ...p, pressure: .22 + .7 * Math.sin(Math.PI * j / (list.length - 1)) })),
-        3.2 + i * .08, { opacity: .82, dryness: .35, controls: [{ at: 0, side: .1, inkLoad: .96 }, { at: 1, side: .05, inkLoad: .86 }] })] });
+        4.5 + i * .13, { opacity: .82, dryness: .35, controls: [{ at: 0, side: .1, inkLoad: .96 }, { at: 1, side: .05, inkLoad: .86 }] })] });
     }
     // The rear source segments stop on either side of this authored front fold.
     // Nothing is filled white, and moving a group does not repair occlusion.
@@ -251,7 +330,7 @@ function makeDocument(definition, { seed, layout }, stage) {
     const first = crossings[0], last = crossings.at(-1);
     groups.push({ id: 'front-fold', role: 'mark', parentId: 'cloth', strokes: [stroke('ridge',
       [{ x: first.x - 21, y: first.y - 5, pressure: .08 }, ...crossings.map(p => ({ ...p, pressure: .72 })),
-        { x: last.x + 22, y: last.y + 5, pressure: .08 }], stage === 2 ? 3.2 : 2.5,
+        { x: last.x + 22, y: last.y + 5, pressure: .08 }], shaping ? stage === 2 ? 4.4 : 3.8 : stage === 2 ? 3.2 : 2.5,
       { opacity: stage === 2 ? .86 : .74, smoothing: 'catmull-rom' })] });
   }
   const result = createStrokeGroupDocument(groups, { ...size, seed, strokeWidth: 3, dryness: .28, opacity: .78 });
@@ -312,6 +391,24 @@ function audit(studies, requireThree = true) {
       stroke.options.start + stroke.options.duration < 8 && stroke.points.every(p => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.x <= 560 && p.y >= 0 && p.y <= 260)))));
     record(`${item.id}/one-stroke-per-source`, [a, b, c].every(document => document.result.marks.length === document.recipe.groups.reduce((sum, group) => sum + group.strokes.length, 0)));
     const kind = definitions.find(definition => definition.id === item.id).kind;
+    if (shapingKinds.has(kind)) {
+      const allLines = [b, c].flatMap(document => document.recipe.groups.flatMap(group => group.strokes));
+      record(`${item.id}/editable-entry-body-release`, allLines.every(stroke => {
+        const pressures = stroke.points.map(p => p.pressure);
+        return pressures.every(value => Number.isFinite(value) && value >= 0 && value <= 1)
+          && pressures[0] < .34 && pressures.at(-1) < .12 && Math.max(...pressures) > .75;
+      }));
+      record(`${item.id}/pressed-release-pressed-passages`, allLines.filter(stroke => sourceLength(stroke.points) > 20).every(stroke => {
+        const distances = arcPositions(stroke.points), total = distances.at(-1);
+        const pressuresAt = (from, to) => stroke.points.filter((_, i) => distances[i] / total >= from && distances[i] / total <= to).map(p => p.pressure);
+        return Math.max(...pressuresAt(.24, .45)) > .8 && Math.min(...pressuresAt(.46, .57)) < .4
+          && Math.max(...pressuresAt(.65, .81)) > .78;
+      }));
+      record(`${item.id}/local-resistant-and-fluid-contact`, allLines.every(stroke => {
+        const dryness = stroke.options.controls.map(control => control.dryness).filter(value => value !== undefined);
+        return Math.max(...dryness) - Math.min(...dryness) >= .35;
+      }));
+    }
     if (kind === 'mixed') record('hun/selective-darkening-and-plane', c.recipe.groups.some(group => group.id.startsWith('soft-plane-'))
       && c.recipe.groups.filter(group => group.id.startsWith('awake-')).length < folds(c).length
       && Math.max(...c.recipe.groups.filter(group => group.id.startsWith('awake-')).flatMap(group => group.strokes.map(stroke => stroke.options.start)))

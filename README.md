@@ -10,6 +10,8 @@
 
 第13–30批已补入独立研究：共18批、54组，与原十二批合计30批、90组，覆盖100项目录。[新增批次浏览页](examples/remaining-review.html)支持换形、逐项源JSON编辑、局部试改及每批三项合图导出；[完整清单与边界](docs/remaining-technique-batches.md)记录研究范围。皴水保留缺证并仅提供中性湿域探针，品字点等候选也不升级为传统预设。公开研究索引 `getTechniqueStudies(id)` 与具名实现、阅读证据、艺术验收分别保存。
 
+第13–22批（编号37–66）继续按反馈回修摩擦、散束、沉积、湿边、色层和线笔提按，见[进阶材质回修记录](docs/advanced-material-revision.md)。新增可选的[微扰工具](docs/perturbation.md)将固定种子的路径、压力和散束变化保存为普通源数据，保留逐笔编辑和重放。
+
 当前按基础笔墨的依赖逐批推进。「笔法学习册」在 `/examples/technique-atlas.html` 提供分层术语目录、来源、实现进度与成对样片；先补起收笔、提按、转折和点迹，再逐步研究墨法、水法与皴法。已读文献和学习路线见 [笔法研究](docs/brush-research.md)，可组合 API 与适用边界见 [基础用笔](docs/brushwork.md)。目录收录不等于已经实现或掌握这些技法。
 
 [基础笔法第一批](examples/foundation-study.html)集中研究提按、中锋／侧锋、枯润／飞白。新 `createBrushDocument()` 同时保存原始笔路、技法设定、局部控制、生成器标识和生成结果，可在同一笔内调整接触与枯润，并从保存的设定继续修改。试验台提供三种笔路、同题与组合对照、PNG／JSON导出及JSON载入核对。原有视觉认可限定于回修前归档样片；不扩为全部传统用法或新材质。[接口说明](docs/foundation-brush.md)与[已确认开发方案](docs/foundation-plan.md)分别说明数据语义和后续顺序。

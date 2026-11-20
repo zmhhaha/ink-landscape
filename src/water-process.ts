@@ -15,6 +15,8 @@ interface WaterEventState {
   readonly at?: number;
   readonly dryAfter?: number;
   readonly mode?: 'glaze' | 'wet-mix';
+  /** Same optional inward contact feather as an ink layer. */
+  readonly edgeSoftness?: number;
 }
 
 export interface WaterInkEventSource extends WaterEventState {
@@ -54,7 +56,7 @@ export interface WaterProcessDocumentPatch {
 }
 
 const GENERATOR = 'water-event-process-v1';
-const commonFields = ['kind', 'id', 'water', 'at', 'dryAfter', 'mode', 'strokes'];
+const commonFields = ['kind', 'id', 'water', 'at', 'dryAfter', 'mode', 'strokes', 'edgeSoftness'];
 const inkFields = new Set([...commonFields, 'concentration']);
 const waterFields = new Set([...commonFields, 'droplets']);
 const optionFields = new Set(['width', 'height', 'seed', 'background', 'ink']);
@@ -106,7 +108,7 @@ export function createWaterProcessDocument(events: readonly WaterEventSource[], 
   for (const source of events) {
     if (!source || (source.kind !== 'ink' && source.kind !== 'water')) throw new RangeError('Water event kind must be ink or water');
     fields(source, source.kind === 'ink' ? inkFields : waterFields, 'water event');
-    for (const key of ['concentration', 'water', 'at', 'dryAfter', 'mode'] as const) {
+    for (const key of ['concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness'] as const) {
       if (key in source && (source as unknown as Record<string, unknown>)[key] === null) throw new TypeError(`water event.${key} cannot be null`);
     }
     if (source.kind === 'ink' && !Array.isArray(source.strokes)) throw new TypeError('Ink events require a strokes array');
@@ -124,7 +126,8 @@ export function createWaterProcessDocument(events: readonly WaterEventSource[], 
     layers.push({ id: source.id, strokes: [...(source.strokes ?? []), ...(drops?.map(dropContact) ?? [])],
       concentration: source.kind === 'water' ? 0 : source.concentration ?? .5,
       water: source.water ?? (source.kind === 'water' ? 1 : .5), at: source.at ?? 0,
-      dryAfter: source.dryAfter ?? 2, mode: source.mode ?? 'wet-mix' });
+      dryAfter: source.dryAfter ?? 2, mode: source.mode ?? 'wet-mix',
+      ...(source.edgeSoftness === undefined ? {} : { edgeSoftness: source.edgeSoftness }) });
   }
   // Delegate path, style, event order, identity and scene validation to the
   // established compiler; it also owns all nested contact data independently.
@@ -134,7 +137,7 @@ export function createWaterProcessDocument(events: readonly WaterEventSource[], 
     const sparse: Record<string, unknown> = { kind: source.kind, id: owned.id };
     if (source.strokes !== undefined) sparse.strokes = Object.freeze(owned.strokes.slice(0, source.strokes.length));
     if (source.kind === 'water' && source.droplets !== undefined) sparse.droplets = dropsByEvent[index];
-    for (const key of ['concentration', 'water', 'at', 'dryAfter', 'mode'] as const) {
+    for (const key of ['concentration', 'water', 'at', 'dryAfter', 'mode', 'edgeSoftness'] as const) {
       if (key in source && (source as unknown as Record<string, unknown>)[key] !== undefined) sparse[key] = owned[key];
     }
     return Object.freeze(sparse) as unknown as WaterEventSource;

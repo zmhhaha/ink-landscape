@@ -1,4 +1,5 @@
-import { createInkProcessDocument, createWaterProcessDocument, createStrokeGroupDocument } from '../dist/index.js';
+import { createInkProcessDocument, createWaterProcessDocument, createStrokeGroupDocument,
+  createNoise1D, jitterPath, varyPressure, splitBristles } from '../dist/index.js';
 
 // These are authored comparisons, not inferred reconstructions of named techniques.
 // Every material irregularity is seeded; the saved documents retain editable paths.
@@ -36,8 +37,8 @@ function context({ seed = 261120, layout = 'slope' } = {}) {
     groups: groups => createStrokeGroupDocument(groups, options),
   };
 }
-const layer = (id, strokes, concentration = .4, at = 0, water = .4, dryAfter = 1, mode = 'glaze') =>
-  ({ id, strokes, concentration, at, water, dryAfter, mode });
+const layer = (id, strokes, concentration = .4, at = 0, water = .4, dryAfter = 1, mode = 'glaze', edgeSoftness) =>
+  ({ id, strokes, concentration, at, water, dryAfter, mode, ...(edgeSoftness === undefined ? {} : { edgeSoftness }) });
 const inkEvent = (...args) => ({ kind: 'ink', ...layer(...args) });
 const waterEvent = (id, strokes, at, water = .8, dryAfter = 1.2) =>
   ({ kind: 'water', id, strokes, at, water, dryAfter, mode: 'wet-mix' });
@@ -53,8 +54,32 @@ function outline(c, id = 'structure', width = 2.4, dryness = .52) {
     c.stroke(`${id}-inner`, [[200, 65, .15], [207, 111, .8], [240, 139, .65], [245, 181, .6], [285, 221, .1]], width * .8, dryness, .66),
     c.stroke(`${id}-ledge`, [[278, 122, .1], [313, 160, .7], [367, 178, .55], [404, 210, .1]], width * .85, dryness, .68)];
 }
-function regionRows(c, id, polygon, { width = 24, dryness = .12, opacity = .75, ink, clip = polygon } = {}) {
+function organicBoundary(polygon, seed, amplitude = 3.4) {
+  const coarse = createNoise1D(seed), fine = createNoise1D(seed ^ 0x91e10da5), base = [];
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[(i + polygon.length - 1) % polygon.length], b = polygon[i], d = polygon[(i + 1) % polygon.length], e = polygon[(i + 2) % polygon.length];
+    const count = Math.max(4, Math.ceil(Math.hypot(d[0] - b[0], d[1] - b[1]) / 4));
+    for (let j = 0; j < count; j++) {
+      const t = j / count, t2 = t * t, t3 = t2 * t;
+      base.push([0, 1].map(k => .5 * (2 * b[k] + (-a[k] + d[k]) * t + (2 * a[k] - 5 * b[k] + 4 * d[k] - e[k]) * t2 + (-a[k] + 3 * b[k] - 3 * d[k] + e[k]) * t3)));
+    }
+  }
+  let distance = 0;
+  return base.map((p, i) => {
+    const prev = base[(i + base.length - 1) % base.length], next = base[(i + 1) % base.length];
+    if (i) distance += Math.hypot(p[0] - base[i - 1][0], p[1] - base[i - 1][1]);
+    const dx = next[0] - prev[0], dy = next[1] - prev[1], len = Math.hypot(dx, dy) || 1;
+    const offset = amplitude * (.64 * coarse(distance / 27) + .28 * fine(distance / 8.7) + .13 * fine(distance / 2.8 + 47));
+    return [p[0] - dy / len * offset, p[1] + dx / len * offset];
+  });
+}
+function regionRows(c, id, polygon, { width = 24, dryness = .12, opacity = .75, ink, clip = polygon, organic = false, densityScale = 1 } = {}) {
   const marks = [], rng = random(c.seed ^ hash(id));
+  if (organic) {
+    const original = polygon;
+    polygon = organicBoundary(polygon, c.seed ^ hash(`${id}-boundary`), 3.6);
+    clip = clip === original ? polygon : organicBoundary(clip, c.seed ^ hash(`${id}-clip`), 2.2);
+  }
   const xs = polygon.map(p => p[0]), ys = polygon.map(p => p[1]);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   let doubleArea = 0;
@@ -76,7 +101,11 @@ function regionRows(c, id, polygon, { width = 24, dryness = .12, opacity = .75, 
     }
     return result;
   };
-  const contactWidth = width * 2 + 6, count = Math.max(20, Math.ceil(Math.abs(doubleArea) * .5 / (contactWidth * contactWidth) * 11));
+  const material = createNoise1D(c.seed ^ hash(`${id}-load`));
+  const contactWidth = organic ? width * 1.05 + 4 : width * 2 + 6;
+  const requestedCount = Math.ceil(Math.abs(doubleArea) * .5 / (contactWidth * contactWidth) * (organic ? 18 : 11));
+  // Three independently editable regions may coexist in one <=512-stroke process.
+  const count = organic ? Math.max(48, Math.min(150, requestedCount)) : Math.max(20, requestedCount);
   // Nonperiodic, highly overlapping round contacts make a continuous weak field.
   // A short near-constant-pressure path has no repeated taper or global hatch axis.
   for (let k = 0; k < count; k++) {
@@ -84,10 +113,13 @@ function regionRows(c, id, polygon, { width = 24, dryness = .12, opacity = .75, 
     do { x = minX + rng() * (maxX - minX); y = minY + rng() * (maxY - minY); } while (!inside(x, y));
     const angle = rng() * Math.PI * 2, extent = contactWidth * (.025 + rng() * .06);
     const dx = Math.cos(angle) * extent, dy = Math.sin(angle) * extent, pressure = .89 + rng() * .09;
-    const edge = Math.min(1, edgeDistance(x, y) / (contactWidth * .34));
-    const load = (.68 + .32 * (y - minY) / Math.max(1, maxY - minY)) * (.86 + rng() * .28);
+    const distance = edgeDistance(x, y), edge = Math.min(1, distance / (contactWidth * .34));
+    const load = organic ? (1 - Math.exp(-Math.pow(distance / (contactWidth * .17), 1.7)))
+      * (.83 + .18 * material(x / 71 + material(y / 53) * .8) + .06 * material(y / 19 + x / 41))
+      : (.68 + .32 * (y - minY) / Math.max(1, maxY - minY)) * (.86 + rng() * .28);
+    const localWidth = organic ? Math.min(contactWidth * (.86 + rng() * .42), distance * 2.3 + contactWidth * .4) : contactWidth * (.94 + rng() * .48);
     marks.push(c.stroke(`${id}-contact-${k}`, [[x - dx, y - dy, pressure], [x + dx, y + dy, pressure]],
-      contactWidth * (.94 + rng() * .48), dryness * .35, opacity * .087 * load * Math.max(.025, edge),
+      localWidth, dryness * .35, opacity * densityScale * (organic ? .095 : .087) * Math.max(.01, load) * (organic ? 1 : Math.max(.025, edge)),
       { axis: 'center', smoothing: 'linear', clip, ...(ink ? { ink } : {}) }));
   }
   return marks;
@@ -115,6 +147,23 @@ function dots(c, id, anchors, { count = 5, spread = 20, width = 13, dryness = .2
     }
   });
   return result;
+}
+function wetMark(c, id, x, y, width, rng, dryness = .08, opacity = .8) {
+  const count = rng() < .42 ? 3 : 2;
+  return Array.from({ length: count }, (_, i) => {
+    const length = width * (.64 + rng() * .58), angle = (rng() - .5) * .16;
+    const px = x + (i ? (rng() - .5) * width * .55 : 0), py = y + (i ? (rng() - .5) * width * .41 : 0);
+    const dx = Math.cos(angle) * length * .5, dy = Math.sin(angle) * length * .5;
+    return c.stroke(`${id}-wet-part-${i}`, [[px - dx, py - dy, .77 + rng() * .15], [px, py + .35 * (rng() - .5), .94], [px + dx, py + dy, .74 + rng() * .15]],
+      width * (.56 + rng() * .5), dryness, opacity * (.59 + rng() * .27), { axis: 'center', entry: 'preserve', finish: 'preserve', smoothing: 'catmull-rom' });
+  });
+}
+function wetDots(c, id, anchors, { count = 5, spread = 20, width = 13, dryness = .08, opacity = .8 } = {}) {
+  const rng = random(c.seed ^ hash(id));
+  return anchors.flatMap(([x, y], a) => Array.from({ length: count + a % 2 }, (_, i) => {
+    const radius = Math.sqrt(-2 * Math.log(Math.max(.001, rng()))) * spread * .42, angle = rng() * Math.PI * 2;
+    return wetMark(c, `${id}-${a}-${i}`, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius * .52, width * (.72 + rng() * .5), rng, dryness, opacity);
+  }).flat());
 }
 function leaves(c, id = 'leaf') {
   const regions = [
@@ -150,7 +199,15 @@ function batch16(options) {
   const paleTraces = [c.stroke('retained-pale-a', [[139, 180, .2], [170, 196, .86], [237, 192, .25]], 29, .16, .73, { axis: 'side' }),
     c.stroke('retained-pale-b', [[260, 165, .1], [315, 181, .88], [366, 197, .2]], 34, .19, .76, { axis: 'side' })];
   const waterAlong = [c.stroke('adjacent-clear-water', [[154, 196, .3], [225, 205, .85], [303, 199, .7], [373, 212, .2]], 26, .08, .9, { axis: 'side' })];
-  const mass = regionRows(c, 'initial-ink-mass', [[89, 192], [145, 92], [213, 89], [280, 136], [342, 113], [432, 180], [471, 223], [127, 225]], { width: 38, opacity: .83, dryness: .18 });
+  const depositRng = random(c.seed ^ hash('retained-deposit-grains'));
+  const deposits = [[195, 169, 12], [223, 191, 9], [308, 162, 14], [348, 193, 10], [404, 204, 11]].flatMap(([x, y, count], a) =>
+    Array.from({ length: count }, (_, i) => {
+      const angle = depositRng() * Math.PI * 2, radius = Math.sqrt(depositRng()) * (a % 2 ? 13 : 17);
+      const px = x + Math.cos(angle) * radius, py = y + Math.sin(angle) * radius * .45, size = .65 + Math.pow(depositRng(), 1.8) * 1.7;
+      return c.stroke(`retained-grain-${a}-${i}`, [[px, py, .92], [px + .16 + depositRng() * .35, py + (depositRng() - .5) * .4, .92]], size, .04, .91,
+        { axis: 'center', smoothing: 'linear' });
+    }));
+  const mass = regionRows(c, 'initial-ink-mass', [[89, 192], [145, 92], [213, 89], [280, 136], [342, 113], [432, 180], [471, 223], [127, 225]], { width: 38, opacity: .83, dryness: .18, organic: true, densityScale: 1.8 });
   const secondMass = [c.stroke('directional-mass-a', [[183, 202, .1], [210, 131, .88], [265, 131, .8], [324, 196, .1]], 63, .12, .9, { axis: 'side' }),
     c.stroke('directional-mass-b', [[331, 202, .15], [367, 155, .85], [416, 181, .9], [455, 215, .1]], 42, .2, .88, { axis: 'side' })];
   return [
@@ -161,45 +218,64 @@ function batch16(options) {
         variant('dry-lines', '机制 · 干重线与留纸', c.ink([layer('dry-structure', [...outline(c, 'dry-outline', 5.4, .59), ...grain], .96, 0, .05)])),
         variant('focal', '组织 · 湿底后焦笔点醒', c.ink([layer('wet-base', wash, .16, 0, .8), layer('structure', structure, .62, 2.3, .08), layer('dry-focal', grain, .94, 4.7, .03)])),
       ]),
-    study('aged', '47 · 宿墨 · 材料外观研究', ['ink-aged'], '均匀水墨 → 浓痕与旁侧淡水痕 → 分区点醒。',
-      '比较浓墨保留、淡墨痕与邻接水迹，同时保留可辨认的结构。',
-      '未模拟留置、脱胶、储存天数或真实沉淀；仅将部分支持的浓宿、淡宿观察线索拆开，不用纸张泛黄冒充宿墨。', [
+    study('aged', '47 · 宿墨 · 材料外观研究', ['ink-aged'], '均匀水墨 → 浓痕、淡水痕与微粒沉积 → 分区点醒。',
+      '比较浓墨保留、淡墨痕、邻接水迹及局部可编辑高浓微粒；微粒聚在部分浓痕与水迹邻缘，避免全幅颗粒贴图。',
+      '新增的高浓微粒是普通可编辑墨笔来源，不是留置、脱胶、储存天数或真实沉淀化学；仅研究部分支持的观察线索，不用纸张泛黄冒充宿墨。', [
         variant('uniform', '对照 · 均一湿墨', c.ink([layer('uniform-load', wash, .4, 0, .75)])),
-        variant('material', '机制 · 浓痕 / 淡痕 / 清水', c.water([inkEvent('retained-dark', fragments, .88, 0, .25, 2), inkEvent('retained-pale', paleTraces, .17, .5, .85, 2), waterEvent('adjacent-water', waterAlong, 1.2, .65)])),
-        variant('organized', '组织 · 山体暗处点醒', c.water([inkEvent('under-structure', structure, .57, 0, .06, .2), inkEvent('retained-pale', [...wash, ...paleTraces], .13, .7, .8, 2), inkEvent('retained-dark', fragments, .89, 1.4, .18, 1.2), waterEvent('adjacent-water', waterAlong, 1.7, .58)])),
+        variant('material', '机制 · 浓痕 / 淡痕 / 清水 / 微粒', c.water([inkEvent('retained-dark', fragments, .88, 0, .25, 2), inkEvent('retained-pale', paleTraces, .17, .5, .85, 2), waterEvent('adjacent-water', waterAlong, 1.2, .65), inkEvent('retained-deposit-grains', deposits, .98, 3.2, .02, .1)])),
+        variant('organized', '组织 · 山体暗处点醒 / 局部沉积', c.water([inkEvent('under-structure', structure, .57, 0, .06, .2), inkEvent('retained-pale', [...wash, ...paleTraces], .13, .7, .8, 2), inkEvent('retained-dark', fragments, .89, 1.4, .18, 1.2), waterEvent('adjacent-water', waterAlong, 1.7, .58), inkEvent('retained-deposit-grains', deposits, .98, 3.6, .02, .1)])),
       ]),
     study('splashed', '48 · 泼墨', ['ink-splashed'], '大面墨势未收拾 → 顺势选笔 → 多面墨势与勾染组织。',
       '分别看初始墨势、后续选择和可读形体。第三列收拾的线不沿墨团机械描一圈。',
       '初始面由调用者区域和宽笔路给出，未模拟倾倒、手布晕开或流体；保留史例支持的先布墨、再勾染关系。', [
-        variant('unresolved', '对照 · 只有初始墨势', c.ink([layer('initial-mass', mass, .42, 0, .86, 2)])),
-        variant('selected', '机制 · 顺墨势收拾', c.ink([layer('initial-mass', mass, .32, 0, .86, 2), layer('selected-contours', [structure[0], structure[2], ...grain.slice(0, 4)], .74, 3.2, .08)])),
-        variant('organized', '组织 · 两层墨势 / 选择勾染', c.ink([layer('initial-mass', mass, .2, 0, .86, 2), layer('local-mass', secondMass, .46, .8, .8, 2, 'wet-mix'), layer('selected-contours', [...structure, ...grain.slice(3, 8)], .77, 3.6, .08)])),
+        variant('unresolved', '对照 · 只有初始墨势', c.ink([layer('initial-mass', mass, .42, 0, .86, 2, 'glaze', .94)])),
+        variant('selected', '机制 · 顺墨势收拾', c.ink([layer('initial-mass', mass, .32, 0, .86, 2, 'glaze', .94), layer('selected-contours', [structure[0], structure[2], ...grain.slice(0, 4)], .74, 3.2, .08)])),
+        variant('organized', '组织 · 两层墨势 / 选择勾染', c.ink([layer('initial-mass', mass, .2, 0, .86, 2, 'glaze', .94), layer('local-mass', secondMass, .46, .8, .8, 2, 'wet-mix'), layer('selected-contours', [...structure, ...grain.slice(3, 8)], .77, 3.6, .08)])),
       ]),
   ];
 }
 
 function batch17(options) {
-  const c = context(options), structure = outline(c), texture = striations(c), local = regionRows(c, 'local-tone', SHADE, { width: 25, opacity: .68 });
+  const c = context(options), structure = outline(c), texture = striations(c), local = regionRows(c, 'local-tone', SHADE, { width: 25, opacity: .88, organic: true, densityScale: 1.8 });
   const backgroundLeft = [[43, 95], [77, 63], [122, 48], [165, 59], [146, 83], [112, 121], [90, 166], [81, 204], [49, 218], [42, 167]];
   const backgroundRight = [[266, 71], [329, 49], [401, 60], [466, 82], [513, 118], [515, 192], [490, 218], [460, 181], [388, 147], [338, 102], [279, 116]];
   // Only the inner mountain-facing edge is a deposit boundary. The outer cloud
   // fades through its authored contacts; no visible polygon cuts its perimeter.
   const leftClip = [[-120, -120], [213, -120], [167, 59], [146, 83], [112, 121], [90, 166], [81, 204], [49, 290], [-120, 350]];
   const rightClip = [[247, -120], [700, -120], [700, 350], [487, 350], [490, 218], [460, 181], [388, 147], [338, 102], [279, 116]];
-  const around = [...regionRows(c, 'background-left', backgroundLeft, { width: 34, opacity: .75, clip: leftClip }), ...regionRows(c, 'background-right', backgroundRight, { width: 37, opacity: .65, clip: rightClip })];
+  const around = [...regionRows(c, 'background-left', backgroundLeft, { width: 34, opacity: .88, clip: leftClip, organic: true, densityScale: 1.8 }), ...regionRows(c, 'background-right', backgroundRight, { width: 37, opacity: .78, clip: rightClip, organic: true, densityScale: 1.8 })];
   const flowers = (id, centers, outlined = false) => centers.flatMap(([x, y, scale], index) => {
-    const hues = ['#a36555', '#b9806d', '#ba705b'];
-    return [-2.55, -1.35, -.12, 1.05, 2.26].map((a, k) => {
-      const dx = Math.cos(a), dy = Math.sin(a), length = (27 + (k % 2) * 8) * scale;
-      return c.stroke(`${id}-${index}-${k}`, [[x + dx * length, y + dy * length, .08], [x + dx * length * .63 - dy * 3, y + dy * length * .63 + dx * 3, .9], [x + dx * 3, y + dy * 3, .45]],
-        (outlined ? 16 : 22) * scale, .21 + k * .025, .66 + k * .035, { axis: 'side', ink: hues[(index + k) % hues.length], finish: 'open' });
+    const rng = random(c.seed ^ hash(`${id}-petal-${index}`));
+    return [-2.63, -1.53, -.21, .95, 2.13].flatMap((a, k) => {
+      a += (rng() - .5) * .19;
+      const dx = Math.cos(a), dy = Math.sin(a), nx = -dy, ny = dx, length = (26 + rng() * 14) * scale;
+      const width = (outlined ? 19 : 25) * scale * (.84 + rng() * .25), bend = (rng() - .5) * 10 * scale;
+      const path = [[x + dx * 3, y + dy * 3, .48], [x + dx * length * .42 + nx * bend, y + dy * length * .42 + ny * bend, .91],
+        [x + dx * length * .8 + nx * bend * .4, y + dy * length * .8 + ny * bend * .4, .94], [x + dx * length, y + dy * length, .52]];
+      const pigment = ['#b98276', '#ad7468', '#bd8b7d'][(index + k) % 3];
+      const result = [c.stroke(`${id}-${index}-${k}-pale-base`, path, width * 1.12, .08, .22, { axis: 'center', ink: '#d6b8ac' }),
+        c.stroke(`${id}-${index}-${k}-transparent-color`, path.map(([px, py, p], i) => [px + nx * (i ? 1.7 : .2) * scale, py + ny * (i ? 1.7 : .2) * scale, p * .93]), width * .91, .14, .27, { axis: 'center', ink: pigment }),
+        c.stroke(`${id}-${index}-${k}-local-color`, path.slice(0, 3).map(([px, py, p], i) => [px - nx * (2 + i) * scale, py - ny * (2 + i) * scale, p * .83]), width * .48, .23, .17, { axis: 'center', ink: '#9f6b61' })];
+      for (let f = 0; f < 4; f++) {
+        const at = .36 + rng() * .46, side = f % 2 ? 1 : -1, lateral = side * width * (.30 + rng() * .12);
+        const px = x + dx * length * at + nx * lateral, py = y + dy * length * at + ny * lateral;
+        result.push(c.stroke(`${id}-${index}-${k}-edge-fiber-${f}`, [[px, py, .3], [px + dx * (2 + rng() * 3) + nx * side * 1.3, py + dy * (2 + rng() * 3) + ny * side * 1.3, .06]],
+          .8 + rng() * .9, .23, .16, { ink: pigment }));
+      }
+      return result;
     });
   });
   const floralStem = [c.stroke('flower-stem', [[133, 225, .2], [205, 177, .8], [270, 155, .65], [332, 83, .12]], 3.8, .5, .86, { ink: '#596044' }),
     c.stroke('flower-side-stem', [[238, 169, .3], [347, 168, .64], [415, 128, .1]], 2.8, .48, .8, { ink: '#596044' })];
-  const foliage = [c.stroke('leaf-left', [[201, 182, .12], [175, 160, .95], [124, 151, .08]], 22, .37, .78, { axis: 'side', ink: '#67734f' }),
-    c.stroke('leaf-right', [[281, 150, .18], [319, 126, .94], [377, 126, .08]], 25, .29, .76, { axis: 'side', ink: '#6d7856' }),
-    c.stroke('leaf-low', [[319, 169, .14], [348, 191, .9], [409, 201, .08]], 24, .42, .8, { axis: 'side', ink: '#556948' })];
+  const foliage = [
+    ['left', [[201, 182, .22], [187, 166, .9], [157, 155, .96], [124, 151, .08]], 25],
+    ['right', [[281, 150, .2], [309, 130, .94], [345, 125, .84], [377, 126, .08]], 28],
+    ['low', [[319, 169, .2], [337, 187, .9], [376, 198, .85], [409, 201, .08]], 27],
+  ].flatMap(([id, path, width]) => [
+    c.stroke(`leaf-${id}-pale-base`, path, width * 1.1, .12, .23, { axis: 'center', ink: '#a1aa87' }),
+    c.stroke(`leaf-${id}-transparent-color`, path, width * .85, .25, .37, { axis: 'side', ink: '#74815a' }),
+    c.stroke(`leaf-${id}-local-color`, path.map(([x, y, p], i) => [x + (i === 1 ? 2 : 0), y + (i ? 2.4 : .3), p]), width * .39, .34, .26, { axis: 'center', ink: '#556b47' }),
+  ]);
   const petals = flowers('flower', [[265, 151, 1.12], [332, 82, .82], [415, 127, .7]]);
   const centerMarks = [[265, 151], [332, 82], [415, 127]].flatMap(([x, y], i) => [dot(c, `calyx-${i}`, x, y + 4, 9, 6, .48, .85)]);
   const outlinePetal = c.stroke('independent-petal-outline', [[212, 122, .8], [213, 91, .8], [239, 71, .8], [266, 91, .8], [280, 65, .8], [313, 86, .8], [309, 119, .8], [333, 128, .8], [310, 162, .8], [273, 162, .8], [249, 179, .8], [216, 151, .8], [212, 122, .8]], 2.2, .3, .9);
@@ -207,16 +283,16 @@ function batch17(options) {
     study('rendering', '49 · 渲染', ['ink-rendering'], '结构上全覆均灰 → 皴擦处局部略敷 → 局部与外围分工。',
       '染区须与已有皴擦和体面相连，线条在薄染后仍可读。第三列另外引入外围染区。',
       '采用故宫词条的具体渲/染区分；不是所有时代的唯一术语标准。区域笔路与湿态交换只提供视觉近似。', [
-        variant('all-over', '对照 · 整体平均铺灰', c.ink([layer('structure', [...structure, ...texture], .57, 0, .06, .2), layer('blanket', regionRows(c, 'blanket', ROCK), .27, 1.5, .7)])),
-        variant('local', '机制 · 皴擦处略敷', c.ink([layer('structure', [...structure, ...texture], .62, 0, .05, .2), layer('local-rendering', local, .2, 1.5, .75)])),
-        variant('organized', '组织 · 局部 / 外围分别染', c.ink([layer('structure', [...structure, ...texture], .63, 0, .05, .2), layer('local-rendering', local, .23, 1.5, .73), layer('outside-rendering', around, .13, 3.4, .65)])),
+        variant('all-over', '对照 · 整体平均铺灰', c.ink([layer('structure', [...structure, ...texture], .57, 0, .06, .2), layer('blanket', regionRows(c, 'blanket', ROCK, { organic: true, densityScale: 1.8 }), .27, 1.5, .7, 1, 'glaze', .95)])),
+        variant('local', '机制 · 皴擦处略敷', c.ink([layer('structure', [...structure, ...texture], .62, 0, .05, .2), layer('local-rendering', local, .2, 1.5, .75, 1, 'glaze', .95)])),
+        variant('organized', '组织 · 局部 / 外围分别染', c.ink([layer('structure', [...structure, ...texture], .63, 0, .05, .2), layer('local-rendering', local, .23, 1.5, .73, 1, 'glaze', .95), layer('outside-rendering', around, .13, 3.4, .65, 1, 'glaze', .94)])),
       ]),
     study('background-wash', '50 · 烘染', ['ink-background-wash'], '主体上铺灰 → 主体周围染 → 远染 / 雪白 / 近景。',
       '同一山体保留纸白，背景与明亮主体相邻，第三列用前后浓淡组织空间。',
       '背景染区由作者避开主体，不用白色覆盖或擦除；馆藏雪景支持这种衬托关系，不代表一切云雾配方。', [
-        variant('on-subject', '对照 · 灰色落在主体上', c.ink([layer('subject-gray', regionRows(c, 'subject', ROCK), .27, 0, .65), layer('structure', structure, .58, 2, .04)])),
-        variant('around', '机制 · 外围染 / 留主体白', c.ink([layer('background-wash', around, .24, 0, .72), layer('structure', structure, .58, 2, .04)])),
-        variant('organized', '组织 · 远染留白 / 近景重笔', c.ink([layer('background-wash', around, .23, 0, .72), layer('snow-structure', structure.slice(0, 3), .45, 2, .05), layer('foreground', [c.stroke('foreground-bank', [[65, 225, .1], [152, 212, .82], [222, 226, .7], [326, 231, .12]], 9, .78, .96), ...striations(c, 'foreground-rock', 5, true)], .86, 4, .04)])),
+        variant('on-subject', '对照 · 灰色落在主体上', c.ink([layer('subject-gray', regionRows(c, 'subject', ROCK, { organic: true, densityScale: 1.8 }), .27, 0, .65, 1, 'glaze', .95), layer('structure', structure, .58, 2, .04)])),
+        variant('around', '机制 · 外围染 / 留主体白', c.ink([layer('background-wash', around, .24, 0, .72, 1, 'glaze', .94), layer('structure', structure, .58, 2, .04)])),
+        variant('organized', '组织 · 远染留白 / 近景重笔', c.ink([layer('background-wash', around, .23, 0, .72, 1, 'glaze', .94), layer('snow-structure', structure.slice(0, 3), .45, 2, .05), layer('foreground', [c.stroke('foreground-bank', [[65, 225, .1], [152, 212, .82], [222, 226, .7], [326, 231, .12]], 9, .78, .96), ...striations(c, 'foreground-rock', 5, true)], .86, 4, .04)])),
       ]),
     study('mogu', '51 · 没骨 · 设色造形', ['line-mogu'], '独立勾廓支架 → 色笔边缘造形 → 花叶枝的叠接。',
       '中、右列花瓣和叶面的色与空白承担轮廓，不依靠预先的闭合墨线。枝梗仍是物象自身的线。',
@@ -231,6 +307,8 @@ function batch17(options) {
 function batch18(options) {
   const c = context(options), leaf = leaves(c), outlines = [leaf.stem, ...leaf.edges, ...leaf.veins];
   const flat = leafWashes(c, 'flat', leaf.regions), local = leafWashes(c, 'shadow', leaf.regions, { fraction: .48, dryness: .21, opacity: .78 });
+  const dividedFlat = leafWashes(c, 'divided-flat', leaf.regions, { organic: true });
+  const dividedLocal = leafWashes(c, 'divided-shadow', leaf.regions, { fraction: .48, dryness: .21, opacity: .9, organic: true, densityScale: 1.8 });
   const push = leaf.veins.map((source, i) => ({ ...source, options: { ...source.options, id: `water-push-${i}`, width: 24, dryness: .04, opacity: .9 } }));
   const frontPaint = leafWashes(c, 'front-color', leaf.regions, { width: 21, dryness: .26, opacity: .39, ink: '#78835c' });
   const backing = leafWashes(c, 'back-white', leaf.regions, { width: 23, dryness: .08, opacity: .33, ink: '#e8ddba' });
@@ -245,9 +323,9 @@ function batch18(options) {
     study('divided-wash', '52 · 分染', ['ink-divided-wash'], '平涂 → 局部暗笔与清水推染 → 分区再染。',
       '水笔沿叶片局部结构推开深浅，初始墨线干层不随水事件整体漂移。第三列只在暗面加深。',
       '借工笔花鸟两笔关系作单色结构实验；每个事件整组瞬时到达，湿窗不是实测半干时间，也不是完整连续运水。', [
-        variant('flat', '对照 · 轮廓内平均平涂', c.water([inkEvent('dry-lines', outlines, .67, 0, .03, .2), inkEvent('flat-color', flat, .3, 1, .65, 1)])),
-        variant('two-brush', '机制 · 局部施墨 / 清水推开', c.water([inkEvent('dry-lines', outlines, .67, 0, .03, .2), inkEvent('local-shadow', local, .35, 1, .77, 2), waterEvent('clear-push', push, 1.4, .76)])),
-        variant('organized', '组织 · 两笔过渡 / 暗面复染', c.water([inkEvent('dry-lines', outlines, .67, 0, .03, .2), inkEvent('local-shadow', local, .27, 1, .77, 2), waterEvent('clear-push', push, 1.4, .76), inkEvent('local-second-pass', leafWashes(c, 'shadow-second', leaf.regions, { fraction: .31, dryness: .35 }), .23, 3.9, .24, .7)])),
+        variant('flat', '对照 · 轮廓内平均平涂', c.water([inkEvent('dry-lines', outlines, .67, 0, .03, .2), inkEvent('flat-color', dividedFlat, .3, 1, .65, 1)])),
+        variant('two-brush', '机制 · 局部施墨 / 清水推开', c.water([inkEvent('dry-lines', outlines, .67, 0, .03, .2), inkEvent('local-shadow', dividedLocal, .35, 1, .77, 2, 'glaze', .95), waterEvent('clear-push', push, 1.4, .76)])),
+        variant('organized', '组织 · 两笔过渡 / 暗面复染', c.water([inkEvent('dry-lines', outlines, .67, 0, .03, .2), inkEvent('local-shadow', dividedLocal, .27, 1, .77, 2, 'glaze', .95), waterEvent('clear-push', push, 1.4, .76), inkEvent('local-second-pass', leafWashes(c, 'shadow-second', leaf.regions, { fraction: .31, dryness: .35, organic: true, densityScale: 1.8 }), .23, 3.9, .24, .7, 'glaze', .94)])),
       ], [299, 126]),
     study('glazing', '53 · 罩染 · 单色层次研究', ['ink-glazing'], '只有局部深浅 → 厚层盖平 → 薄层统一仍存结构。',
       '看已有线、局部深浅与统一层是否共存。中列故意过重，右列将薄罩放在已干结构之后。',
@@ -305,20 +383,34 @@ function batch19(options) {
 
 function scatterBundles(c, id, anchors, count = 7) {
   const rng = random(c.seed ^ hash(id));
-  return anchors.flatMap(([x, y, dx, dy], a) => Array.from({ length: count }, (_, k) => {
-    const offset = (k - (count - 1) / 2) * 2.4, drift = rng() * 5;
-    return c.stroke(`${id}-${a}-${k}`, [[x + offset, y, .06], [x + dx * .27 + offset * .7, y + dy * .28 + drift, .75 + rng() * .2],
-      [x + dx * .58 + offset * 1.2 + (k % 2 ? 4 : -3), y + dy * .62, .45 + rng() * .25], [x + dx + offset * 1.7, y + dy, .04]],
-      1.3 + rng() * 2.7, .66 + rng() * .26, .57 + rng() * .34,
-      { axis: k % 3 ? 'center' : 'side', rhythm: 'hesitant', strength: .6, controls: [{ at: .31, inkLoad: .95 }, { at: .77, inkLoad: .32, dryness: .91 }] });
-  }));
+  return anchors.flatMap(([x, y, dx, dy], a) => {
+    const key = c.seed ^ hash(`${id}-${a}`), bend = (rng() - .5) * 19;
+    const path = [{ x, y, pressure: .26 }, { x: x + dx * .25 + bend, y: y + dy * .27, pressure: .91 },
+      { x: x + dx * .57 - bend * .4, y: y + dy * .63, pressure: .54 }, { x: x + dx, y: y + dy, pressure: .12 }];
+    return splitBristles(path, count, { seed: key, spread: 16 + rng() * 11, width: 2.5 + rng() * 1.1, opacity: .83, variance: .67, spacing: 4 }).map((strand, k) => {
+      const origin = strand.points[0], angle = k === 0 ? -.03 : (rng() - .5) * .47, cs = Math.cos(angle), sn = Math.sin(angle), scale = .73 + rng() * .5;
+      const shifted = strand.points.map((p, i) => {
+        const px = (p.x - origin.x) * scale, py = (p.y - origin.y) * scale;
+        return { x: origin.x + px * cs - py * sn, y: origin.y + px * sn + py * cs,
+          pressure: varyPressure(p.pressure ?? .8, .42, { seed: key ^ hash(strand.id), at: i / Math.max(1, strand.points.length - 1), wavelength: .21 }) };
+      });
+      const points = jitterPath(shifted, 1.3, { seed: key ^ hash(strand.id), wavelength: 6.7, preserveEndpoints: false }).map(p => [p.x, p.y, p.pressure]);
+      const central = strand.id === 'bristle-0';
+      const outerDryness = .53 + rng() * .28, outerEndDryness = .76 + rng() * .13;
+      return c.stroke(`${id}-${a}-${strand.id}`, points, strand.width * (central ? 2.15 : 1), central ? .27 : outerDryness, central ? Math.max(.9, strand.opacity) : strand.opacity,
+        { axis: central || k % 3 ? 'center' : 'side', rhythm: 'hesitant', strength: .42, controls: central
+          ? [{ at: .24, inkLoad: 1, dryness: .24 }, { at: .73, inkLoad: .94, dryness: .36 }]
+          : [{ at: .24, inkLoad: .95 }, { at: .73, inkLoad: .6, dryness: outerEndDryness }] });
+    });
+  });
 }
 function batch20(options) {
   const c = context(options);
-  const rowDots = Array.from({ length: 21 }, (_, i) => dot(c, `uniform-dot-${i}`, 130 + i % 7 * 48, 102 + Math.floor(i / 7) * 46, 23, 13));
-  const rearDots = dots(c, 'rear-wet-dots', [[163, 105], [192, 123], [231, 147]], { count: 5, spread: 31, width: 13, dryness: .12, opacity: .7 });
-  const nearDots = dots(c, 'near-wet-dots', [[309, 146], [351, 163], [390, 193]], { count: 6, spread: 33, width: 18, dryness: .17, opacity: .87 });
-  const frontDots = dots(c, 'dry-focal-dots', [[315, 177], [387, 208]], { count: 3, spread: 20, width: 11, dryness: .66, opacity: .95 });
+  const rowRng = random(c.seed ^ hash('uniform-wet-dots'));
+  const rowDots = Array.from({ length: 21 }, (_, i) => wetMark(c, `uniform-dot-${i}`, 130 + i % 7 * 48, 102 + Math.floor(i / 7) * 46, 13, rowRng)).flat();
+  const rearDots = wetDots(c, 'rear-wet-dots', [[163, 105], [192, 123], [231, 147]], { count: 5, spread: 31, width: 13, dryness: .07, opacity: .7 });
+  const nearDots = wetDots(c, 'near-wet-dots', [[309, 146], [351, 163], [390, 193]], { count: 6, spread: 33, width: 18, dryness: .1, opacity: .87 });
+  const frontDots = wetDots(c, 'dry-focal-dots', [[315, 177], [387, 208]], { count: 3, spread: 20, width: 11, dryness: .55, opacity: .95 });
   const wetDrag = [c.stroke('drag-upper', [[109, 170, .1], [174, 120, .9], [241, 136, .78], [292, 175, .1]], 42, .17, .86, { axis: 'side', drag: 'reverse', strength: .6 }),
     c.stroke('drag-lower', [[207, 210, .1], [281, 178, .88], [354, 182, .7], [438, 216, .1]], 37, .2, .8, { axis: 'side', drag: 'reverse', strength: .54 })];
   const draggingWater = [c.stroke('directional-clear-drag', [[146, 151, .1], [217, 156, .86], [278, 187, .65], [352, 205, .1]], 39, .04, .9, { axis: 'side' })];
@@ -357,37 +449,62 @@ function batch21(options) {
   const c = context(options);
   const loop = (id, x, y, sx, sy) => c.stroke(id, [[x - sx, y, .7], [x - sx * .7, y - sy, .7], [x + sx * .5, y - sy, .7], [x + sx, y, .7], [x + sx * .3, y + sy, .7], [x - sx * .7, y + sy * .6, .7], [x - sx, y, .7]], 1.8, .25, .8);
   const closedLoops = [loop('loop-a', 178, 145, 58, 62), loop('loop-b', 284, 151, 55, 53), loop('loop-c', 393, 164, 51, 58)];
+  const skeletonLine = (id, coords, width, dryness, opacity) => {
+    const key = c.seed ^ hash(id), dense = [];
+    coords.slice(0, -1).forEach((a, i) => {
+      const b = coords[i + 1], count = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 6));
+      for (let k = 0; k < count; k++) { const t = k / count; dense.push({ x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t,
+        pressure: varyPressure(a[2] + (b[2] - a[2]) * t, .18, { seed: key, at: i + t, wavelength: .37 }) }); }
+    });
+    const end = coords.at(-1); dense.push({ x: end[0], y: end[1], pressure: end[2] });
+    return c.stroke(id, jitterPath(dense, .62, { seed: key, wavelength: 7, tangentRatio: .1 }).map(p => [p.x, p.y, p.pressure]), width, dryness, opacity,
+      { smoothing: 'linear', rhythm: 'hesitant', strength: .2, controls: [{ at: .24, inkLoad: .95 }, { at: .49, dryness: .26 }, { at: .73, inkLoad: .72 }] });
+  };
   const fineSkeleton = [
-    c.stroke('open-ridge', [[125, 198, .12], [130, 137, .7], [156, 91, .58], [197, 72, .7], [227, 108, .1]], 1.8, .39, .87),
-    c.stroke('open-right', [[239, 113, .14], [258, 145, .75], [249, 185, .62], [272, 210, .1]], 1.7, .42, .8),
-    c.stroke('inner-rib-a', [[154, 123, .1], [188, 110, .68], [207, 133, .57], [201, 166, .1]], 1.4, .39, .83),
-    c.stroke('inner-rib-b', [[140, 162, .14], [177, 159, .7], [197, 189, .1]], 1.4, .43, .8),
-    c.stroke('base-rib', [[153, 202, .1], [191, 215, .67], [223, 204, .12]], 1.6, .4, .82),
+    skeletonLine('open-ridge', [[125, 198, .12], [129, 151, .71], [130, 137, .96], [143, 112, .32], [156, 91, .83], [181, 78, .38], [197, 72, .94], [211, 88, .38], [227, 108, .1]], 1.8, .33, .9),
+    skeletonLine('open-right', [[239, 113, .14], [251, 133, .4], [258, 145, .97], [252, 163, .3], [249, 185, .88], [259, 198, .35], [272, 210, .1]], 1.7, .36, .87),
+    skeletonLine('inner-rib-a', [[154, 123, .1], [179, 112, .49], [188, 110, .94], [199, 121, .31], [207, 133, .86], [202, 151, .3], [201, 166, .1]], 1.4, .32, .86),
+    skeletonLine('inner-rib-b', [[140, 162, .14], [162, 158, .38], [177, 159, .96], [188, 172, .32], [197, 189, .1]], 1.4, .36, .86),
+    skeletonLine('base-rib', [[153, 202, .1], [178, 212, .41], [191, 215, .93], [207, 210, .3], [223, 204, .12]], 1.6, .33, .87),
   ];
   const smallRock = (id, dx, dy, scale) => fineSkeleton.map(source => ({ ...source, points: source.points.map(p => ({ ...p, x: 140 + (p.x - 140) * scale + dx, y: 90 + (p.y - 90) * scale + dy })), options: { ...source.options, id: `${id}-${source.options.id}`, width: source.options.width * (.8 + scale * .2) } }));
   const rounded = dots(c, 'rounded', [[160, 137], [245, 166], [340, 157], [407, 190]], { count: 4, width: 12, spread: 21, dryness: .22 });
   const nails = (id, anchors) => {
-    const rng = random(c.seed ^ hash(id));
-    return anchors.flatMap(([x, y, count], a) => Array.from({ length: count }, (_, i) => {
-      const px = x + (rng() - .5) * 48, py = y + (rng() - .5) * 38, len = 12 + rng() * 15;
-      return c.stroke(`${id}-${a}-${i}`, [[px, py, .95], [px + 2 + rng() * 3, py + 4, .85], [px + 6 + rng() * 5, py + len, .02]],
-        8 + rng() * 6, .58 + rng() * .25, .83, { axis: 'side', smoothing: 'linear', entry: 'concealed', finish: 'open', strength: .48 });
-    }));
+    const rng = random(c.seed ^ hash(id)), placement = random(c.seed ^ hash(`${id}-placement`));
+    return anchors.flatMap(([x, y, count], a) => {
+      const occupied = [];
+      return Array.from({ length: count }, (_, i) => {
+        let px, py, attempt = 0;
+        do {
+          const radius = Math.sqrt(-2 * Math.log(Math.max(.001, placement()))) * (a === 1 ? 14 : 10), direction = placement() * Math.PI * 2;
+          px = x + Math.cos(direction) * radius; py = y + Math.sin(direction) * radius * .67; attempt++;
+        } while (attempt < 80 && occupied.some(p => Math.hypot(p[0] - px, p[1] - py) < (a === 1 ? 5 : 7)));
+        occupied.push([px, py]);
+        const len = 12 + rng() * 15, shoulder = 2 + rng() * 3, tail = 6 + rng() * 5, originalWidth = 8 + rng() * 6, dryness = .58 + rng() * .25;
+        const angle = (placement() - .5) * .94 + (a - 1) * .16, size = .68 + placement() * .65, cs = Math.cos(angle), sn = Math.sin(angle);
+        const coords = [[0, 0, .95], [shoulder, 4, .85], [tail, len, .02]].map(([dx, dy, p]) => [px + (dx * cs - dy * sn) * size, py + (dx * sn + dy * cs) * size, p]);
+        return c.stroke(`${id}-${a}-${i}`, coords, originalWidth * size, dryness, .83,
+          { axis: 'side', smoothing: 'linear', entry: 'concealed', finish: 'open', strength: .48 });
+      });
+    });
   };
-  const nailMarks = nails('nail', [[212, 142, 7], [310, 166, 8], [392, 201, 6]]);
+  const nailMarks = nails('nail', [[212, 142, 5], [310, 166, 11], [392, 201, 4]]);
   const branches = [c.stroke('tree-trunk', [[174, 231, .25], [218, 182, .9], [257, 149, .7], [284, 76, .12]], 5.4, .56, .88),
     c.stroke('branch-left', [[239, 163, .7], [198, 128, .55], [148, 113, .12]], 3.3, .58, .85),
     c.stroke('branch-right', [[257, 150, .65], [328, 132, .5], [376, 90, .1]], 3.2, .54, .82)];
   const anchors = [[148, 113], [284, 76], [376, 90], [328, 132]];
-  const attachedLeafGroups = anchors.map(([x, y], i) => {
-    const rng = random(c.seed ^ hash(`attached-${i}`));
-    return Array.from({ length: 4 + i % 3 }, (_, k) => {
-      const angle = (-2.9 + rng() * 2.6) + (i % 2 ? .3 : -.15), len = 18 + rng() * 21;
-      return c.stroke(`attached-${i}-${k}`, [[x, y, .24], [x + Math.cos(angle) * len * .47, y + Math.sin(angle) * len * .47, .92], [x + Math.cos(angle) * len, y + Math.sin(angle) * len, .04]], 8 + rng() * 7, .31 + rng() * .3, .83, { axis: 'side', finish: 'open', strength: .3 });
+  const neutralGroups = (id, locations, attached = false) => locations.map(([x, y], i) => {
+    const rng = random(c.seed ^ hash(`${id}-${i}`)), count = [2, 5, 3, 4][i % 4], centerAngle = [-1.82, -1.45, -1.09, -1.37][i % 4];
+    return Array.from({ length: count }, (_, k) => {
+      const rank = k / Math.max(1, count - 1), angle = centerAngle + (rank - .5) * .9 + (rng() - .5) * .3, len = 12 + rank * 21 + rng() * 4;
+      const rootX = x + (attached ? 0 : (rng() - .5) * 8), rootY = y + (attached ? 0 : (rng() - .5) * 6), dx = Math.cos(angle), dy = Math.sin(angle);
+      return c.stroke(`${id}-${i}-${k}`, [[rootX, rootY, .38], [rootX + dx * len * .35 - dy * 2.1, rootY + dy * len * .35 + dx * 2.1, .93], [rootX + dx * len, rootY + dy * len, .12]],
+        9 + rng() * 6, .23 + rng() * .29, .77, { axis: 'side', finish: 'open', strength: .19 });
     });
   });
-  const triangularStamp = Array.from({ length: 4 }, (_, i) => [[166 + i * 65, 109], [153 + i * 65, 134], [180 + i * 65, 134]].map(([x, y], k) => dot(c, `stamp-${i}-${k}`, x, y, 11, 12, .2)));
-  const ordinaryGroups = dots(c, 'ordinary-staggered', [[151, 121], [280, 81], [379, 105]], { count: 5, spread: 24, width: 12 });
+  const attachedLeafGroups = neutralGroups('attached', anchors, true);
+  const separateGroups = neutralGroups('separate', [[145, 136], [257, 125], [367, 150], [441, 135]]);
+  const ordinaryGroups = neutralGroups('ordinary-overlap', [[177, 143], [270, 122], [346, 151], [393, 139]]);
   return [
     study('kulou-probe', '61 · 骷髅皴待考 · 细勾骨架研究', ['cun-kulou'], '重复闭环 → 细线骨架与疏处 → 小石组间的空隙。',
       '骨架为不等长细勾，局部密而留空；第三列错开石组尺度、位置和开口。',
@@ -403,11 +520,11 @@ function batch21(options) {
         variant('nail-marks', '机制 · 方重头 / 渐提尖尾', c.groups([c.group('nail-marks', nailMarks)])),
         variant('organized', '组织 · 勾廓 / 暗面短皴 / 淡染', c.ink([layer('stone-contour', outline(c, 'stone-contour', 2.5), .66, 0, .06, .4), layer('short-nails', nailMarks, .77, 1.3, .12), layer('light-shade', regionRows(c, 'light-shade', SHADE, { dryness: .24 }), .11, 3.5, .5)])),
       ], [310, 166]),
-    study('pin-probe', '63 · 品字点待考 · 普通错位点叶组织', ['leaf-pin'], '固定三点图章反例 → 不等数错位点组 → 点叶根部附枝。',
-      '中列只称普通点组；右列每叶根部与枝梗端点相接，组与组留出呼吸空间。',
+    study('pin-probe', '63 · 品字点待考 · 中性变数组点叶', ['leaf-pin'], '2–5点普通分组 → 不等数错位重叠 → 内短外长的点叶附枝。',
+      '各组仅按中性作者布局保存2–5点，组内重叠、内短外长；右列根部与枝梗端点相接，组与组保留呼吸空间。',
       '公开课件只确证“品字点叶”名称，未核实图页、笔序或计数。这里明确不是品字点复现，不从“品”字强造三点规范，也不与攒三聚五合并。', [
-        variant('fixed-triples', '反例 · 从字形猜固定三点图章', c.groups(triangularStamp.map((marks, i) => c.group(`triangle-stamp-${i}`, marks)))),
-        variant('staggered', '中性机制 · 不等数错位点组', c.groups([c.group('ordinary-staggered-groups', ordinaryGroups)])),
+        variant('separate-clusters', '中性对照 · 2–5点普通分组', c.groups(separateGroups.map((marks, i) => c.group(`ordinary-separated-${i}`, marks)))),
+        variant('staggered', '中性机制 · 变数组重叠 / 内短外长', c.groups(ordinaryGroups.map((marks, i) => c.group(`ordinary-overlap-${i}`, marks)))),
         variant('attached', '中性组织 · 普通点叶附枝 / 留组间空隙', c.groups([c.group('branch-scaffold', branches, 'structure'), ...attachedLeafGroups.map((marks, i) => c.group(`ordinary-attached-${i}`, marks, 'mark', 'branch-scaffold'))])),
       ], [283, 83]),
   ];
@@ -419,6 +536,52 @@ const sourceId = source => source.id ?? source.options?.id;
 const findVariant = (studies, studyId, variantId) => studies.find(s => s.id === studyId)?.variants.find(v => v.id === variantId)?.document;
 const findEvent = (document, id) => events(document).find(e => e.id === id);
 const check = (id, pass, detail) => ({ id, pass: !!pass, ...(detail ? { detail } : {}) });
+function revisionChecks(item) {
+  const get = id => item.variants.find(v => v.id === id)?.document;
+  if (['scorched', 'tuoni-probe', 'glazing', 'supporting-wash'].includes(item.id)) return [check('original-layers-do-not-opt-into-soft-density', item.variants.every(v => events(v.document).every(e => !Object.hasOwn(e, 'edgeSoftness'))))];
+  if (item.id === 'aged') {
+    const grains = findEvent(get('material'), 'retained-deposit-grains');
+    return [check('editable-concentrated-micro-deposits', grains?.concentration >= .95 && grains.strokes.length >= 40 && grains.strokes.every(s => s.options.width >= .6 && s.options.width <= 2.5 && s.points.every(p => p.pressure >= .9)))];
+  }
+  if (['splashed', 'rendering', 'background-wash', 'divided-wash'].includes(item.id)) {
+    const target = item.id === 'splashed' ? findEvent(get('organized'), 'initial-mass') : item.id === 'rendering' ? findEvent(get('organized'), 'local-rendering')
+      : item.id === 'background-wash' ? findEvent(get('around'), 'background-wash') : findEvent(get('two-brush'), 'local-shadow');
+    const allowed = item.id === 'splashed' ? ['initial-mass'] : item.id === 'rendering' ? ['blanket', 'local-rendering', 'outside-rendering']
+      : item.id === 'background-wash' ? ['subject-gray', 'background-wash'] : ['local-shadow', 'local-second-pass'];
+    return [check('dense-irregular-boundary-and-varying-local-load', target?.strokes.every(s => s.options.clip?.length >= 40) && new Set(target.strokes.map(s => Math.round(s.options.width * 100))).size > 10 && new Set(target.strokes.map(s => Math.round(s.options.opacity * 10000))).size > 10),
+      check('soft-density-opt-in-is-confined-to-authored-washes', target.edgeSoftness >= .8 && target.edgeSoftness <= 1 && item.variants.every(v => events(v.document).every(e => !Object.hasOwn(e, 'edgeSoftness') || allowed.includes(e.id) && e.edgeSoftness >= .8 && e.edgeSoftness <= 1)))];
+  }
+  if (item.id === 'mogu') {
+    const marks = get('organized').recipe.groups.find(g => g.id === 'direct-petals').strokes;
+    return [check('pale-base-transparent-local-color-and-edge-fibers', ['pale-base', 'transparent-color', 'local-color', 'edge-fiber'].every(part => marks.some(s => s.id.includes(part))) && marks.filter(s => !s.id.includes('edge-fiber')).every(s => s.options.opacity < .3) && new Set(marks.map(s => s.options.ink)).size >= 5)];
+  }
+  if (item.id === 'midian') {
+    const marks = findEvent(get('organized'), 'near-tier').strokes, counts = new Map();
+    for (const s of marks) { const id = sourceId(s).replace(/-wet-part-\d+$/, ''); counts.set(id, (counts.get(id) ?? 0) + 1); }
+    return [check('wet-dots-use-two-or-three-filled-overlaps', [...counts.values()].every(n => n === 2 || n === 3) && new Set(counts.values()).size === 2 && marks.every(s => s.options.axis === 'center' && s.options.finish === 'preserve' && s.points[0].pressure >= .7 && s.points.at(-1).pressure >= .7))];
+  }
+  if (item.id === 'baoshi-research') {
+    const marks = findEvent(get('bundles'), 'scattered-bundles').strokes;
+    const angles = marks.map(s => Math.atan2(s.points.at(-1).y - s.points[0].y, s.points.at(-1).x - s.points[0].x));
+    const lengths = marks.map(s => s.points.reduce((sum, p, i) => i ? sum + Math.hypot(p.x - s.points[i - 1].x, p.y - s.points[i - 1].y) : sum, 0));
+    const main = marks.filter(s => sourceId(s).endsWith('-bristle-0'));
+    return [check('split-bundles-vary-angle-length-and-force', Math.max(...angles) - Math.min(...angles) > .5 && Math.max(...lengths) > Math.min(...lengths) * 1.8 && marks.some(s => sourceId(s).includes('part')) && marks.every(s => s.points.some(p => p.pressure > .3))),
+      check('continuous-main-bristles-remain-readable', main.length === 3 && main.every(s => s.options.width > 4 && s.options.dryness <= .3 && s.options.controls.every(control => control.inkLoad >= .9)))];
+  }
+  if (item.id === 'kulou-probe') return [check('fine-skeleton-has-authored-pressure-accents', allStrokes(get('fine-skeleton')).every(s => s.points.length >= 8 && Math.max(...s.points.map(p => p.pressure)) - Math.min(...s.points.map(p => p.pressure)) > .5))];
+  if (item.id === 'dingtou') {
+    const marks = allStrokes(get('nail-marks')), counts = new Map();
+    for (const s of marks) { const match = sourceId(s).match(/^nail-(\d+)-/); counts.set(match[1], (counts.get(match[1]) ?? 0) + 1); }
+    const angles = marks.map(s => Math.atan2(s.points.at(-1).y - s.points[0].y, s.points.at(-1).x - s.points[0].x));
+    return [check('nail-layout-varies-density-size-and-direction', new Set(counts.values()).size === 3 && Math.max(...angles) - Math.min(...angles) > .5 && Math.max(...marks.map(s => s.options.width)) > Math.min(...marks.map(s => s.options.width)) * 1.8)];
+  }
+  if (item.id === 'pin-probe') {
+    const groups = get('attached').recipe.groups.filter(g => g.parentId === 'branch-scaffold');
+    const length = s => Math.hypot(s.points.at(-1).x - s.points[0].x, s.points.at(-1).y - s.points[0].y);
+    return [check('neutral-leaf-groups-use-two-to-five-inner-short-outer-long', groups.every(g => g.strokes.length >= 2 && g.strokes.length <= 5 && length(g.strokes.at(-1)) > length(g.strokes[0]) * 1.5) && new Set(groups.map(g => g.strokes.length)).size === 4)];
+  }
+  return [];
+}
 function commonAudit(studies, expectedCount = 3) {
   return [check('three-distinct-variants-per-study', studies.length === expectedCount && studies.every(s => s.variants.length === 3 && new Set(s.variants.map(v => JSON.stringify(v.document.recipe))).size === 3)),
     check('editable-paths-and-pressure', studies.every(s => s.variants.every(v => allStrokes(v.document).length > 0 && allStrokes(v.document).every(source => source.points.length >= 2 && source.points.every(p => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.pressure)))))),
@@ -481,7 +644,7 @@ const definitions = [
 ];
 export const remainingInkBatches = Object.freeze(definitions.map(([number, id, title, make, audit]) => Object.freeze({
   number, id, title, layouts: LAYOUTS, layout: 'slope', make,
-  audit(studies) { const checks = [...commonAudit(studies), ...audit(studies)]; return { ok: checks.every(item => item.pass), checks }; },
+  audit(studies) { const checks = [...commonAudit(studies), ...audit(studies), ...studies.flatMap(revisionChecks)]; return { ok: checks.every(item => item.pass), checks }; },
 })));
 
 /** The gallery can audit a single edited study without regenerating its siblings. */
@@ -552,6 +715,6 @@ export function auditRemainingInk(item) {
     }
     default: add('known-remaining-ink-study', false);
   }
-  const checks = [...commonAudit([item], 1), ...result];
+  const checks = [...commonAudit([item], 1), ...result, ...revisionChecks(item)];
   return { ok: checks.every(entry => entry.pass), checks };
 }

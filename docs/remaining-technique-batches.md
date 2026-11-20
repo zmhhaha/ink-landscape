@@ -4,6 +4,8 @@
 
 [统一浏览与源编辑](../examples/remaining-review.html)提供每批三项、三列对照、两倍局部、三种布局和 PNG／JSON 导出。前十二批的两轮回修保留在[原浏览页](../examples/revision-review.html)。本轮完成研究覆盖与可执行样片，艺术效果由用户统一评价。
 
+第13–22批（编号37–66）在后续按用户反馈继续回修摩擦、湿边、色层与提按，见[进阶材质回修](advanced-material-revision.md)。下方首次覆盖验证对应回修前归档，后续状态以回修记录为准。
+
 | 批次 | 研究一 | 研究二 | 研究三 |
 | --- | --- | --- | --- |
 | 13 | 偏锋候选 | 顺锋／逆锋关系 | 散锋聚散 |
@@ -37,7 +39,7 @@
 
 TECHNIQUE_STUDY_BATCHES／getTechniqueStudies(id) 是独立的可执行研究索引。TECHNIQUE_CATALOG.entryPoint 继续只表示原有具名程序入口；研究覆盖不会把 unresolved／disputed 资料或艺术状态提升为通过。逐项动作、反例与限制见[基础运笔和书法记录](remaining-brush-review.md)、[墨水和剩余皴组记录](remaining-ink-review.md)、[线描记录](remaining-line-review.md)。
 
-## 验证
+## 首次覆盖验证（回修前归档）
 
 `npm test` 全部169项通过，`npm run check` 通过。实际 Chromium 浏览器完成新增18批、三种布局共486份样片的检查：源JSON重建和像素一致、绝对时间往返重放、起始空白与可见笔迹、三列差异，以及162个局部编辑案例均通过；各批作者结构审计也通过。编辑页面另验证了单笔移动加宽和无效源错误提示。
 

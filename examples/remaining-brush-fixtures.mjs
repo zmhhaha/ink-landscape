@@ -1,4 +1,4 @@
-import { createStrokeGroupDocument } from '../dist/index.js';
+import { createStrokeGroupDocument, createNoise1D, jitterPath, varyPressure, splitBristles, sampleStrokePath } from '../dist/index.js';
 import { authoredPathTexture } from './authored-study-path.mjs';
 
 // All paths are original authored exercises. Names identify the reading question,
@@ -24,17 +24,17 @@ function transfer([x, y, pressure = 1], layout) {
   return { x, y, pressure };
 }
 
-function author(layout) {
+function author(layout, seed) {
   const stroke = (id, points, width = 27, options = {}) => ({ id,
     points: points.map(point => transfer(point, layout)),
     options: { ...plain, width, opacity: .89, dryness: .25, start: 0, duration: 2.4, ...options } });
   const group = (id, strokes, role = 'mark', parentId) => ({ id, role,
     ...(parentId === undefined ? {} : { parentId }), strokes });
-  return { stroke, group };
+  return { stroke, group, seed };
 }
 
 function buildStudy({ id, title, techniqueIds, variable, criteria, limits, detail = [280, 130], labels, make }, inputs) {
-  const a = author(inputs.layout);
+  const a = author(inputs.layout, inputs.seed);
   const focus = transfer(detail, inputs.layout);
   return { id, title, techniqueIds, variable, criteria, limits, detail: [focus.x, focus.y],
     variants: labels.map((label, stage) => ({ id: ['baseline', 'mechanism', 'combined'][stage], label,
@@ -61,52 +61,139 @@ function sample(values, t) {
   return a.map((value, k) => value + (b[k] - value) * u);
 }
 
-function splitStrokes(stage, { stroke }) {
-  const ranges = stage === 0 ? Array.from({ length: 6 }, () => [0, 1]) : stage === 1
-    ? [[0, .98], [.04, .86], [.15, 1], [0, .7], [.27, .94]]
-    : [[0, .99], [.04, .62], [.16, .97], [0, .74], [.24, .92], [.65, 1], [.12, .54]];
-  return ranges.map(([start, end], i) => {
+const sourcePoints = values => values.map(([x, y, pressure = 1]) => ({ x, y, pressure }));
+const sourceValues = points => points.map(({ x, y, pressure = 1 }) => [x, y, pressure]);
+const fineFlow = sampleStrokePath(sourcePoints(flow), { spacing: 1.6 }).map(({ x, y, pressure }) => ({ x, y, pressure }));
+const seedFor = (seed, id) => {
+  let value = seed >>> 0;
+  for (const character of id) value = Math.imul(value ^ character.charCodeAt(0), 16777619) >>> 0;
+  return value;
+};
+
+// Fine resistance belongs to editable source. Keeping drag='forward' avoids the
+// older periodic reverse geometry from being applied a second time at compile.
+function resistanceSource(seed, reverse = false) {
+  const materialSeed = (seed ^ (reverse ? 0x381397 : 0x420419)) >>> 0;
+  const small = jitterPath(fineFlow, reverse ? .36 : .27, { seed: materialSeed, wavelength: reverse ? 6.3 : 8.7,
+    tangentRatio: .055, preserveEndpoints: true });
+  const layered = jitterPath(small, reverse ? .17 : .13, { seed: (materialSeed ^ 0x632f8a) >>> 0,
+    wavelength: reverse ? 19.7 : 28.3, tangentRatio: .04, preserveEndpoints: true });
+  const noise = createNoise1D(materialSeed ^ 0x35b17), total = strokeLength(fineFlow);
+  let distance = 0;
+  return layered.map((point, i) => {
+    if (i > 0) distance += Math.hypot(fineFlow[i].x - fineFlow[i - 1].x, fineFlow[i].y - fineFlow[i - 1].y);
+    if (i === 0 || i === layered.length - 1) return [point.x, point.y, fineFlow[i].pressure];
+    const before = fineFlow[Math.max(0, i - 1)], after = fineFlow[Math.min(fineFlow.length - 1, i + 1)],
+      length = Math.hypot(after.x - before.x, after.y - before.y),
+      envelope = Math.min(1, distance / 18, (total - distance) / 18),
+      lag = (noise(distance / 4.9) + 1) * (reverse ? .13 : .035) * envelope;
+    const pressure = varyPressure(varyPressure(fineFlow[i].pressure, reverse ? .12 : .09,
+      { seed: materialSeed, at: distance, wavelength: reverse ? 9.1 : 12.7 }), .045,
+    { seed: (materialSeed ^ 0x18a43) >>> 0, at: distance, wavelength: 37.3 });
+    return [point.x - (after.x - before.x) / length * lag,
+      point.y - (after.y - before.y) / length * lag, pressure];
+  });
+}
+
+function resistanceControls(seed, reverse, emphasizeTurn = false) {
+  const noise = createNoise1D(seed ^ (reverse ? 0x38a37 : 0x42a71)), total = strokeLength(fineFlow), locations = [0];
+  let distance = 0;
+  while ((distance += 9 + (noise(distance / 31.7) + 1) * 5.5) < total - 6) locations.push(distance);
+  locations.push(total);
+  return locations.map(at => {
+    const t = at / total, local = emphasizeTurn ? Math.exp(-Math.pow((t - .49) / .065, 2)) : 0;
+    return { at: t, pressure: Math.min(.99, .87 + noise(at / 13.9) * .075 + local * .07),
+      side: (reverse ? .25 : .105) + noise(at / 27.1) * .035 + local * .19,
+      angle: 1.45 + noise(at / 34.7) * .09 + local * .15,
+      inkLoad: .945 + noise(at / 21.3) * .032 };
+  });
+}
+
+function splitStrokes(stage, { stroke, seed }) {
+  if (stage === 0) return Array.from({ length: 6 }, (_, i) => {
     const points = Array.from({ length: 97 }, (_, j) => {
-      const t = start + (end - start) * j / 96, [x, y, pressure] = sample(flow, t);
+      const t = j / 96, [x, y] = sample(flow, t);
       const left = sample(flow, Math.max(0, t - .01)), right = sample(flow, Math.min(1, t + .01));
       const dx = right[0] - left[0], dy = right[1] - left[1], length = Math.hypot(dx, dy);
-      const offset = stage === 0 ? (i - 2.5) * 5.7 : (i - 2.3) * 5.3 * (.09 + .91 * Math.pow(Math.sin(Math.PI * t), .85))
-        + Math.sin(t * (7.3 + i * .41) + i * 1.7) * (stage === 2 ? 1.5 : .65);
-      const edge = stage === 0 ? .8 : (.16 + .84 * Math.pow(Math.sin(Math.PI * j / 96), .65)) * pressure;
-      return [x - dy / length * offset, y + dx / length * offset, edge];
+      const offset = (i - 2.5) * 5.7;
+      return [x - dy / length * offset, y + dx / length * offset, .8];
     });
-    return stroke(`bundle-${i}`, points, stage === 0 ? 3.5 : [5.5, 3.1, 6.4, 2.8, 4.2, 2.4, 3.6][i], {
-      opacity: stage === 0 ? .77 : [.86, .61, .81, .56, .73, .65, .7][i], dryness: stage === 0 ? .22 : .53 + i % 3 * .09,
-      start: i * .025, duration: 2.5, controls: contact(stage === 0 ? 0 : .22),
-    });
+    return stroke(`bundle-${i}`, points, 3.5, { opacity: .77, dryness: .22,
+      start: i * .025, duration: 2.5, controls: contact(0) });
   });
+  const splitSeed = (seed ^ 0x3917a) >>> 0, count = stage === 1 ? 7 : 8,
+    bundles = splitBristles(fineFlow, count, { seed: splitSeed, spread: stage === 1 ? 30 : 40,
+      width: 5.4, opacity: .79, variance: stage === 1 ? .36 : .48, spacing: 1.8 });
+  return bundles.flatMap((bundle, i) => {
+    const center = i === 0, identity = bundle.id.split('-part')[0], key = seedFor(splitSeed, identity), noise = createNoise1D(key),
+      width = center ? (stage === 1 ? 10.4 : 11.2) : Math.min(6, bundle.width * (.75 + (noise(.4) + 1) * .1)),
+      opacity = center ? .94 : .42 + bundle.opacity * .28 + (noise(2.1) + 1) * .04;
+    const points = bundle.points.map((point, j) => {
+      if (center) return { ...point, pressure: varyPressure(point.pressure ?? 1, .045, { seed: key, at: j * 1.8, wavelength: 31 }) };
+      const t = j / (bundle.points.length - 1), enter = .045 + (noise(3.7) + 1) * .035,
+        exit = .06 + (noise(5.9) + 1) * .05, e = Math.min(1, t / enter), f = Math.min(1, (1 - t) / exit),
+        envelope = (.08 + .92 * e * e * (3 - 2 * e)) * (.05 + .95 * f * f * (3 - 2 * f));
+      return { ...point, pressure: varyPressure((point.pressure ?? 1) * envelope, .11,
+        { seed: key, at: j * 1.8, wavelength: 12.3 }) };
+    });
+    // Extra local breaks apply to selected outer traces only; the central load
+    // stays continuous and the omitted points never become hidden white paint.
+    const sections = !center && (i === 1 || stage === 2 && i % 3 === 2) && points.length > 20
+      ? [points.slice(0, Math.floor(points.length * (stage === 1 ? .46 : .44))),
+        points.slice(Math.ceil(points.length * (stage === 1 ? .5 : .52)))] : [points];
+    return sections.map((section, part) => {
+      const faded = section.map((point, j) => {
+        let taper = 1;
+        if (sections.length > 1 && part === 0 && j >= section.length - 5) taper = .1 + .9 * Math.pow((section.length - 1 - j) / 4, 1.4);
+        if (sections.length > 1 && part > 0 && j < 5) taper = .12 + .88 * Math.pow(j / 4, 1.25);
+        return { ...point, pressure: (point.pressure ?? 1) * taper };
+      });
+      return stroke(`${center ? 'center' : 'outer'}-${bundle.id}${sections.length > 1 ? `-cut-${part}` : ''}`,
+      sourceValues(faded), width, { opacity, dryness: center ? .29 : .49 + (noise(7.1) + 1) * .08,
+        start: center ? 0 : .035 + (noise(9.2) + 1) * .08, duration: 2.5,
+        controls: [{ at: 0, side: center ? .05 : .18, inkLoad: center ? .98 : .82 },
+          { at: .47, side: center ? .07 : .24, inkLoad: center ? 1 : .89 },
+          { at: 1, side: center ? .03 : .13, inkLoad: center ? .96 : .76 }],
+      });
+    });
+    });
 }
 
 const brush13 = [
   { id: 'brush-offset', title: '37 · 偏移与复正', techniqueIds: ['brush-offset'], detail: [281, 140],
     variable: '持续倒侧的中性接触对照 → 前段偏移后复正 → 在两个换向处主动侧用再聚。',
-    criteria: '同一作者笔路、压力、墨色和宽度，只改变锋尖相对接触区的侧移及恢复位置；从控制数据核对偏侧是否真的收回。',
+    criteria: '同一作者笔路、原压力、墨色和最大笔宽，复正时先局部减压收束，再连续归中；接触侧移和压力共同限幅，避免转锋突然膨成团块。',
     limits: '偏锋与侧锋存在异说。本页比较持续偏移、复正与有意侧用，不设“偏移超过某值即败笔”的传统标准，也没有模拟笔杆或真实调锋。',
     labels: ['对照 · 持续偏侧', '复正 · 前侧后中', '局部 · 侧用再聚'],
     make(stage, { stroke, group }) {
       const controls = stage === 0 ? contact(.96, 1.2) : stage === 1
-        ? [{ at: 0, side: .96, angle: 1.2 }, { at: .18, side: .82 }, { at: .36, side: .04, angle: 1.57 }, { at: 1, side: .04 }]
-        : [{ at: 0, side: .12 }, { at: .3, side: .88, angle: 1.1 }, { at: .49, side: .06, angle: 1.57 },
-          { at: .69, side: .75, angle: 1.95 }, { at: .86, side: .04 }, { at: 1, side: .04 }];
+        ? [{ at: 0, side: .96, pressure: .9, angle: 1.2 }, { at: .11, side: .92, pressure: .88, angle: 1.24 },
+          { at: .18, side: .78, pressure: .83, angle: 1.3 }, { at: .25, side: .46, pressure: .68, angle: 1.39 },
+          { at: .31, side: .17, pressure: .64, angle: 1.49 }, { at: .38, side: .04, pressure: .73, angle: 1.57 },
+          { at: .49, side: .04, pressure: .88, angle: 1.57 }, { at: 1, side: .04, pressure: .92, angle: 1.57 }]
+        : [{ at: 0, side: .12, pressure: .9, angle: 1.57 }, { at: .22, side: .25, pressure: .86, angle: 1.47 },
+          { at: .255, side: .51, pressure: .83, angle: 1.35 }, { at: .29, side: .78, pressure: .78, angle: 1.23 },
+          { at: .34, side: .88, pressure: .65, angle: 1.22 }, { at: .385, side: .58, pressure: .61, angle: 1.3 },
+          { at: .43, side: .21, pressure: .69, angle: 1.47 }, { at: .49, side: .06, pressure: .83, angle: 1.57 },
+          { at: .59, side: .2, pressure: .85, angle: 1.68 }, { at: .625, side: .43, pressure: .81, angle: 1.79 },
+          { at: .655, side: .66, pressure: .76, angle: 1.88 }, { at: .69, side: .75, pressure: .63, angle: 1.95 },
+          { at: .735, side: .45, pressure: .6, angle: 1.82 }, { at: .79, side: .14, pressure: .7, angle: 1.65 },
+          { at: .86, side: .04, pressure: .84, angle: 1.57 }, { at: 1, side: .04, pressure: .9, angle: 1.57 }];
       return [group('main', [stroke('line', flow, 29, { controls })])];
     } },
   { id: 'brush-follow-against', title: '38 · 顺拖与逆推候选', techniqueIds: ['brush-follow', 'brush-against'], detail: [281, 140],
     variable: '同一行进方向的顺拖 → 同笔路的逆推候选 → 逆入后仍顺拖，区分起笔和主体。',
-    criteria: '三列原路径与顺序完全相同；逆推由局部rearward接触几何表达，第三列只在起端逆入，主体仍顺拖，不能靠把坐标数组倒序冒充逆锋。',
-    limits: '采用现代《运笔用墨》的顺逆语境。drag=reverse只表达有界后向微移和接触变化，并非真实受力；逆入不等于全程逆推，飞白也不是逆锋的充分证据。',
+    criteria: '三列共用连续骨架、采样站与行进方向；逆推候选仅增加不到一像素的非周期细阻力、微小后滞与连续负荷，第三列只在起端逆入而主体顺拖，避免断折和反转坐标。',
+    limits: '采用现代《运笔用墨》的顺逆语境。候选扰动直接保存在作者源中，关闭旧周期reverse派生；噪声只检验细阻力的形态，并非真实受力或逆锋完成度。逆入不等于全程逆推。',
     labels: ['顺拖 · 同向行进', '逆推 · 局部阻向', '逆入 · 主体顺拖'],
-    make(stage, { stroke, group }) {
-      return [group('main', [stroke('line', flow, 29, { drag: stage === 1 ? 'reverse' : 'forward',
-        entry: stage === 2 ? 'concealed' : 'preserve', controls: contact(.25, 1.35), strength: .85 })])];
+    make(stage, { stroke, group, seed }) {
+      return [group('main', [stroke('line', stage === 1 ? resistanceSource(seed, true) : sourceValues(fineFlow), 29,
+        { drag: 'forward', entry: stage === 2 ? 'concealed' : 'preserve',
+          controls: stage === 1 ? resistanceControls(seed, true) : contact(.25, 1.35), strength: .85 })])];
     } },
   { id: 'brush-split', title: '39 · 散锋聚散', techniqueIds: ['brush-split'], detail: [300, 130],
     variable: '等距等长梳丝反例 → 共同行势内的异束接触 → 局部断续、聚拢与墨量差。',
-    criteria: '各束保存独立源笔路、长度、粗细和浓度；中段展开而两端趋聚，短束与长束相互续接，白缝不能从头至尾等宽。',
+    criteria: '中心束较宽、较实且连续；外束各有独立宽度、墨量、起收和局部断口，中段展开而两端趋聚。短束续接共同笔势，白缝不能从头至尾等宽，也不要求各束等强。',
     limits: '以抱石皴条目中的聚散组织为动作依据，显式束线仍为程序近似，不复原真实笔毫，也不把这组接触实验直接命名为抱石皴或飞白书体。',
     labels: ['反例 · 等距梳丝', '分束 · 共势聚散', '局部 · 断续再聚'],
     make(stage, a) { return [a.group('split', splitStrokes(stage, a))]; } },
@@ -144,15 +231,15 @@ const brush14 = [
       return [group('main', [stroke('line', stage === 0 ? paused : repositioned, 28, { controls })])];
     } },
   { id: 'brush-resistant', title: '42 · 涩行接触候选', techniqueIds: ['brush-resistant'], detail: [280, 140],
-    variable: '均匀颤线反例 → 骨架平顺而接触负荷有节奏 → 换向处短暂增负后再放行。',
-    criteria: '中、末列保持原作者骨架，不给中心线强加随机抖动；连续行进中的局部接触变化与满笔显颤分开观察。',
+    variable: '均匀颤线反例 → 非周期细阻力与连续负荷 → 换向处局部增负后再放行。',
+    criteria: '中、末列共用同一条低幅多尺度扰动源，接触站距与负荷非周期变化；微移小于一像素，保留主势及端点，不用等频大锯齿表现涩。',
     limits: '据刘熙载“涩非迟”“强效有形战掣”限制解释。接触负荷通道是程序假设，不能由粗糙度、速度或干墨单独认定得涩。',
     labels: ['反例 · 外露均颤', '候选 · 稳路变触', '局部 · 负荷承转'],
-    make(stage, { stroke, group }) {
-      const points = stage === 0 ? Array.from({ length: 55 }, (_, i) => { const q = sample(flow, i / 54); return [q[0], q[1] + Math.sin(i * 2.4) * 5.4, q[2]]; }) : flow;
-      const controls = stage === 0 ? contact(.04) : [{ at: 0, pressure: .8, side: .08 }, { at: .17, pressure: .97, side: .16 },
-        { at: .31, pressure: .77, side: .06 }, { at: .48, pressure: stage === 2 ? 1 : .89, side: stage === 2 ? .43 : .15 },
-        { at: .62, pressure: .76, side: .07 }, { at: .8, pressure: .94, side: .18 }, { at: 1, pressure: .78, side: .06 }];
+    make(stage, { stroke, group, seed }) {
+      const points = stage === 0 ? Array.from({ length: 55 }, (_, i) => { const q = sample(flow, i / 54);
+        return [q[0], q[1] + (i === 0 || i === 54 ? 0 : Math.sin(i * 2.4) * 5.4), q[2]]; })
+        : resistanceSource(seed, false);
+      const controls = stage === 0 ? contact(.04) : resistanceControls(seed, false, stage === 2);
       return [group('main', [stroke('line', points, 28, { controls, dryness: .26 })])];
     } },
 ];
@@ -383,17 +470,48 @@ export function auditRemainingBrush(study) {
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const pressurePeak = stroke => Math.max(...stroke.points.map(point => point.pressure ?? 1));
   const tail = stroke => stroke.points.at(-1).pressure ?? 1;
+  const excursions = list => list.reduce((state, item) => ({ count: state.count + (item.side > .6 && !state.active ? 1 : 0),
+    active: item.side > .6 }), { count: 0, active: false }).count;
+  const maxSegment = points => Math.max(...points.slice(1).map((q, i) => Math.hypot(q.x - points[i].x, q.y - points[i].y)));
+  const variableIntervals = list => new Set(list.slice(1).map((q, i) => (q.at - list[i].at).toFixed(5))).size > 8;
   add('public-source', documents.every(document => document.recipe.generator === 'ink-stroke-groups-v1'), 'All variants retain explicit group/brush source.');
   add('fixed-frame-and-time', documents.every(document => document.result.width === 560 && document.result.height === 260 &&
     document.result.background === size.background && document.result.marks.every(mark => mark.start + mark.duration < 8)), 'Fixed frame; all marks complete before eight seconds.');
   switch (study.id) {
-    case 'brush-offset': add('contact-recovers', controls(main(0)).every(c => c.side > .9) && controls(main(1)).at(-1).side < .1 &&
-      controls(main(2)).filter(c => c.side > .7).length === 2 && same(main(0).points, main(2).points), 'Persistent offset versus two local side excursions and recovery, on unchanged source geometry.'); break;
-    case 'brush-follow-against': add('direction-is-not-reversed', same(main(0).points, main(1).points) && same(main(0).points, main(2).points) &&
-      main(0).options.drag === 'forward' && main(1).options.drag === 'reverse' && main(2).options.drag === 'forward' && main(2).options.entry === 'concealed', 'Forward/reverse contact and reverse entry remain separate from authored point order.'); break;
-    case 'brush-split': add('unequal-coupled-bundles', new Set(flat(0).map(s => s.options.width)).size === 1 &&
+    case 'brush-offset': {
+      add('contact-recovers', controls(main(0)).every(c => c.side > .9) && controls(main(1)).at(-1).side < .1 &&
+        excursions(controls(main(2))) === 2 && same(main(0).points, main(2).points), 'Persistent offset versus two local side excursions and recovery, on unchanged source geometry.');
+      add('bounded-turn-shrink', [1, 2].every(i => {
+        const list = controls(main(i));
+        return list.every((q, j) => q.pressure <= .95 && (j === 0 || Math.abs(q.side - list[j - 1].side) / (q.at - list[j - 1].at) < 9)) &&
+          list.some((q, j) => j > 0 && q.side < list[j - 1].side && q.pressure <= .65) && main(i).options.width === main(0).options.width;
+      }), 'Recovery pressure contracts in a bounded window; side change is gradual and maximum nominal width stays fixed.'); break;
+    }
+    case 'brush-follow-against': {
+      const reference = main(0).points, reverse = main(1).points, sameStations = reverse.length === reference.length,
+        deviations = sameStations ? reverse.map((q, i) => Math.hypot(q.x - reference[i].x, q.y - reference[i].y)) : [Infinity];
+      add('direction-is-not-reversed', same(main(0).points, main(2).points) && reverse.length === reference.length &&
+        same(reference[0], reverse[0]) && same(reference.at(-1), reverse.at(-1)) &&
+        [0, 1, 2].every(i => main(i).options.drag === 'forward') && main(2).options.entry === 'concealed',
+      'Source order and endpoints stay fixed; reverse-entry and explicit fine resistance do not invoke periodic reverse geometry.');
+      add('continuous-fine-resistance', sameStations && Math.max(...deviations) < 1 && Math.max(...deviations) > .03 && maxSegment(reverse) < 2.5 &&
+        reverse.slice(1).every((q, i) => (q.x - reverse[i].x) * (reference[i + 1].x - reference[i].x) +
+          (q.y - reverse[i].y) * (reference[i + 1].y - reference[i].y) > 0) && variableIntervals(controls(main(1))),
+      'Subpixel multi-scale displacement keeps forward continuity; irregular contact spacing replaces repeated teeth.'); break;
+    }
+    case 'brush-split': {
+      add('unequal-coupled-bundles', new Set(flat(0).map(s => s.options.width)).size === 1 &&
       new Set(flat(1).map(s => s.options.width)).size >= 4 && new Set(flat(1).map(s => Math.round(strokeLength(s.points)))).size >= 4 &&
-      flat(2).length > flat(1).length, 'The comb control has equal widths; organized bundles differ in width, extent and continuity.'); break;
+        flat(2).length > flat(1).length, 'The comb control has equal widths; organized bundles differ in width, extent and continuity.');
+      add('central-load-and-outer-gaps', [1, 2].every(i => {
+        const center = flat(i).filter(s => s.id.startsWith('center-')), outer = flat(i).filter(s => s.id.startsWith('outer-'));
+        return center.length === 1 && center[0].options.width > Math.max(...outer.map(s => s.options.width)) * 1.5 &&
+          center[0].options.opacity > Math.max(...outer.map(s => s.options.opacity)) + .12 &&
+          outer.some(s => s.id.includes('-part-') || s.id.includes('-cut-')) &&
+          new Set(outer.map(s => s.options.opacity.toFixed(4))).size > 2 &&
+          new Set(outer.map(s => `${s.points[0].x.toFixed(3)}/${s.points.at(-1).x.toFixed(3)}`)).size > 3;
+      }), 'A single broad, loaded center stays continuous; outer strands differ in ink, extent and explicit source gaps.'); break;
+    }
     case 'brush-pause': { const points = main(1).points, peak = points.findIndex(q => q.pressure === .96);
       const near = q => Math.hypot(q.x - points[peak].x, q.y - points[peak].y) < 26;
       add('press-release-and-continue', peak > 0 && peak < points.length - 2 &&
@@ -402,8 +520,15 @@ export function auditRemainingBrush(study) {
     case 'brush-reposition': { const points = main(1).points, dx = main(1).points.at(-1).x - points[0].x;
       add('bounded-local-retreat', points.some((q, i) => i > 0 && (q.x - points[i - 1].x) * dx < 0 && Math.hypot(q.x - points[i - 1].x, q.y - points[i - 1].y) < 12) &&
         controls(main(2)).some(c => c.side > .6) && controls(main(2)).at(-1).side < .1, 'One short authored retreat is followed by forward travel and contact recovery.'); break; }
-    case 'brush-resistant': add('steady-source-variable-contact', same(main(1).points, main(2).points) && turning(main(0).points) > turning(main(1).points) * 2 &&
-      new Set(controls(main(1)).map(c => c.pressure)).size > 3 && documents.every((_, i) => main(i).options.dryness === .26), 'Candidate skeleton stays steady; contact load changes independently of dryness and overt trembling.'); break;
+    case 'brush-resistant': {
+      add('steady-source-variable-contact', same(main(1).points, main(2).points) && turning(main(0).points) > turning(main(1).points) * 2 &&
+        new Set(controls(main(1)).map(c => c.pressure)).size > 3 && documents.every((_, i) => main(i).options.dryness === .26),
+      'Candidates share a finely perturbed skeleton; contact load changes independently of dryness and overt trembling.');
+      add('aperiodic-small-load', variableIntervals(controls(main(1))) && maxSegment(main(1).points) < 2.5 &&
+        controls(main(1)).every(c => c.inkLoad > .9 && c.pressure > .78) &&
+        main(1).points[0].x === main(0).points[0].x && main(1).points.at(-1).x === main(0).points.at(-1).x,
+      'Irregular load stations and dense continuous source keep resistance small and endpoints stable.'); break;
+    }
     case 'brush-fast': add('send-with-continuous-release', documents.every((_, i) => main(i).options.duration === 1.1) && tail(main(1)) < .03 &&
       main(1).points.slice(-4).every((q, i, list) => i === 0 || q.pressure < list[i - 1].pressure) && pressurePeak(main(2)) > pressurePeak(main(1)), 'Same reveal time; multiple source stations release pressure after a controlled support.'); break;
     case 'brush-slow': add('controlled-contact-not-playback-only', documents.every((_, i) => main(i).options.duration === 4.8) &&

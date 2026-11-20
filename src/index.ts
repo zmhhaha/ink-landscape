@@ -1,6 +1,8 @@
 export type * from './types.js';
 export { createInkScene, createRandom, pointInPolygon, resamplePath } from './core.js';
 export { sampleStrokePath } from './path.js';
+export { createNoise1D, jitterPath, varyPressure, splitBristles } from './perturbation.js';
+export type * from './perturbation.js';
 export { renderCanvas } from './canvas.js';
 export { createBrushStroke } from './brushwork.js';
 export type * from './brushwork.js';
