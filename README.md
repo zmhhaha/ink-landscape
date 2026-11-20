@@ -56,6 +56,8 @@
 
 [《芥子园画谱》专题选读](docs/learning/jieziyuan.md)记录版本范围、原文短句与树石叶组织观察；[三项代码对照](examples/jieziyuan-study.html)复用现有笔触研究群树主副、石面皴擦和附枝叶群，提供12个同题/换形画面、逐笔编辑和合图导出。公开图版仅作阅读来源，未加载进渲染；当前为选读与程序假设，尚待艺术评价。
 
+[山石第一轮](docs/rock-form.md)将大斧劈、解索的结构组织接入库：`createRockMacro({ construction: 'structured-v1', pose, technique, seed })`以少量参数生成立、卧、斜块石，也可提供自有分面与方向源；[山石对照页](examples/structured-rock-study.html)提供三种石势、两项换形和逐笔导出。骨线、石面、裂隙与留白保存在可重建配方中。[卷级阅读目录](docs/learning/jieziyuan-catalog.json)分别标记已核目录、选读和待核内容，不换算为全书掌握率。
+
 基础笔法新增可选平滑笔路与不均匀丝束飞白。运行预览后，可从「笔法对照」进入固定种子局部样片，比较折线与平滑、急转换形和枯润梯度；本轮观察与局限见 [笔法实验记录](docs/brush-study.md)。
 
 「岩石分面」提供直立石、斜卧石和三石组合的对照：两组复用42笔皴擦、6条骨线和底墨，比较均匀铺笔与按亮、侧、暗面组织的变化，可切换分面示意并导出 PNG／JSON。配方继续由普通 `stroke`／`wash` 组合，见 [岩面实验记录](docs/rock-planes.md)。

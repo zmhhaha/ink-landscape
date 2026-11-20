@@ -19,7 +19,9 @@ test('eighteen revised studies retain four editable replayable views and discove
     if(record.sourceRecipe?.generator==='ink-point-texture-v1')assert.deepEqual(compilePointTextureRecipe(record.sourceRecipe),compilePointTextureRecipe(JSON.parse(JSON.stringify(record.sourceRecipe))));
     if(record.sourceRecipe?.generator==='ink-surface-cun-v1')assert.deepEqual(compileSurfaceCunRecipe(record.sourceRecipe),compileSurfaceCunRecipe(JSON.parse(JSON.stringify(record.sourceRecipe))));
   }
-  assert.deepEqual(TECHNIQUE_REVISIONS.map(item=>item.techniqueIds.length),[5,5,5,3]);
+  assert.deepEqual(TECHNIQUE_REVISIONS.filter(item=>item.id!=='rock-form-20261120').map(item=>item.techniqueIds.length),[5,5,5,3]);
+  assert.ok(getTechniqueRevisions('cun-axe').some(item=>item.example==='examples/structured-rock-study.html'));
+  assert.ok(getTechniqueRevisions('cun-jiesuo').some(item=>item.id==='rock-form-20261120'));
 });
 
 test('wet stage comparisons hold the contacts and pigment amount while changing authored water time',()=>{

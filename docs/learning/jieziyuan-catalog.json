@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 1,
+  "id": "jieziyuan-volume-catalog-selected-reading-20261120",
+  "recorded": "2026-11-20",
+  "scope": "经核目录的卷级结构与公开选页阅读进度；不是完整逐页目录。",
+  "editionStatus": "以画雅集为二次分发，所称普林斯顿藏本归属及康熙彩印版次未独立核对原馆牌记。央美1679标签不与Smithsonian DOI书目1868合并为同一实物版本。",
+  "sources": [
+    {
+      "id": "cafa-overview",
+      "url": "https://i.cafa.edu.cn/waterprint/ch/chancieb/?ai=300002",
+      "kind": "institutional-catalog-and-commentary",
+      "accessed": "2026-11-20",
+      "read": "总目录与树谱、山石谱介绍；未当作原版逐字全文。"
+    },
+    {
+      "id": "cafa-volume-one",
+      "url": "https://i.cafa.edu.cn/waterprint/ch/chanciebwnl/?x=300002002",
+      "kind": "institutional-catalog",
+      "accessed": "2026-11-20",
+      "read": "可见目录明确题初集卷一，项目号103–134无内容题名；不冒充原刻页码。"
+    },
+    {
+      "id": "cafa-tree-index",
+      "url": "https://i.cafa.edu.cn/waterprint/ch/chanciebwnl/?x=300002003",
+      "kind": "institutional-catalog",
+      "accessed": "2026-11-20",
+      "read": "实际已下载的树谱目录HTML；可见分类和少量缩图，不宣称全卷逐页阅读。"
+    },
+    {
+      "id": "cafa-rock-index",
+      "url": "https://i.cafa.edu.cn/waterprint/ch/chanciebwnl/?x=300002004",
+      "kind": "institutional-catalog",
+      "accessed": "2026-11-20",
+      "read": "实际已下载的山石谱目录HTML；部分370像素缩图已看，详情页此前500，不作全文依据。"
+    },
+    {
+      "id": "yihua-public-previews",
+      "url": "https://yihua.art/jie-zi-yuan-hua-zhuan-quan-ji.html",
+      "kind": "secondary-delivery-public-facsimile-preview",
+      "accessed": "2026-11-20",
+      "read": "HTML列出的公开初集预览；未访问付费完整PDF。"
+    }
+  ],
+  "collections": [
+    {
+      "id": "initial",
+      "title": "初集",
+      "catalogStatus": "volume-structure-verified-in-listed-sources",
+      "sourceIds": [
+        "cafa-overview",
+        "cafa-volume-one",
+        "cafa-tree-index",
+        "cafa-rock-index",
+        "yihua-public-previews"
+      ],
+      "volumes": [
+        {
+          "id": "initial-1",
+          "number": 1,
+          "title": "卷一",
+          "catalogLabel": "初集.卷一",
+          "contentsLabelFromSecondary": "青在堂画学浅说",
+          "titleStatus": "卷号由央美叶目录核实；内容名由以画雅集简介列出，原册题签未核。",
+          "sourceIds": [
+            "cafa-volume-one",
+            "yihua-public-previews"
+          ],
+          "readingStatus": "catalog-only",
+          "selectedPlates": []
+        },
+        {
+          "id": "initial-2",
+          "number": 2,
+          "title": "树谱",
+          "catalogLabel": "初集.卷二 树谱",
+          "sourceIds": [
+            "cafa-overview",
+            "cafa-tree-index"
+          ],
+          "visibleCatalogCategoryExamples": [
+            "树法",
+            "叶法",
+            "夹叶及著色钩藤法",
+            "诸家树法",
+            "诸家杂树法",
+            "诸家松柏树柳法",
+            "蕉桐花竹蒹葭法"
+          ],
+          "categoryScopeNote": "只摘要已读HTML中可见的分类，不生成完整页目录。",
+          "readingStatus": "selected-public-plates-read",
+          "selectedPlates": [
+            "public-preview-1",
+            "public-preview-2",
+            "public-preview-3",
+            "public-preview-4"
+          ],
+          "completeVolumeRead": false
+        },
+        {
+          "id": "initial-3",
+          "number": 3,
+          "title": "山石谱",
+          "catalogLabel": "初集.卷三 山石谱",
+          "sourceIds": [
+            "cafa-overview",
+            "cafa-rock-index"
+          ],
+          "visibleCatalogCategoryExamples": [
+            "石法",
+            "皴法",
+            "山法"
+          ],
+          "overviewCategoryExamples": [
+            "石法",
+            "皴法",
+            "诸家峦头法",
+            "流泉瀑布石梁法"
+          ],
+          "categoryScopeNote": "叶目录的字样和介绍的摘要分别保留；截断的坡径项目不扩写成完整题名。",
+          "readingStatus": "selected-public-plates-read-current-focus",
+          "selectedPlates": [
+            "public-preview-5",
+            "public-preview-6",
+            "public-preview-7-left",
+            "public-preview-8"
+          ],
+          "currentRoundRefocused": [
+            "public-preview-5-left-axe",
+            "public-preview-5-right-jiesuo"
+          ],
+          "completeVolumeRead": false
+        },
+        {
+          "id": "initial-4",
+          "number": 4,
+          "title": "人物屋宇谱",
+          "catalogLabel": "初集.卷四 人物屋宇谱",
+          "sourceIds": [
+            "cafa-overview"
+          ],
+          "readingStatus": "catalog-only",
+          "selectedPlates": [],
+          "completeVolumeRead": false
+        },
+        {
+          "id": "initial-5",
+          "number": 5,
+          "title": "摹做诸家方册式",
+          "catalogLabel": "初集.卷五 摹做诸家方册式",
+          "alternateLabelFromSecondary": "摹彷诸家画谱",
+          "titleStatus": "分别保留央美目录和以画雅集简介用词；未核两个来源的逐页对应。",
+          "sourceIds": [
+            "cafa-overview",
+            "yihua-public-previews"
+          ],
+          "readingStatus": "catalog-only",
+          "selectedPlates": [],
+          "completeVolumeRead": false
+        }
+      ]
+    },
+    {
+      "id": "second",
+      "title": "二集",
+      "catalogStatus": "pending-edition-and-volume-verification",
+      "readingStatus": "not-read-in-this-round",
+      "volumes": []
+    },
+    {
+      "id": "third",
+      "title": "三集",
+      "catalogStatus": "pending-edition-and-volume-verification",
+      "readingStatus": "not-read-in-this-round",
+      "volumes": []
+    },
+    {
+      "id": "later",
+      "title": "后出各集及版本",
+      "catalogStatus": "pending-edition-and-volume-verification",
+      "readingStatus": "not-read-in-this-round",
+      "volumes": []
+    }
+  ],
+  "readingProgress": {
+    "existingPublicReadingRecord": "docs/learning/jieziyuan.json",
+    "alreadySelectedPublicImageNumbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "currentRoundImageNumbers": [
+      5
+    ],
+    "currentRoundUnits": [
+      "左页大斧劈法",
+      "右页解索皴法"
+    ],
+    "htmlListedInitialPreviewNumbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      14,
+      15,
+      16,
+      17
+    ],
+    "htmlListedPreviewCount": 16,
+    "fullBookCompletion": "not-claimed",
+    "fullPdfRead": false,
+    "note": "图号是二次分发文件序号，不能作为统一原刻页码。8张选读和16张公开预览不是全书阅读分母，不换算通读百分比。"
+  },
+  "currentRockStudy": {
+    "sourceImage": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-5.jpg",
+    "localEvidence": "D:/codex-work/archives/ink-landscape/20261120/jieziyuan-study/reading-evidence/jzycjwjkx-5.jpg",
+    "readableExcerpts": [
+      "大斧劈法",
+      "馬遠夏圭多爲之",
+      "解索皴法"
+    ],
+    "shapeScope": "立、卧、斜三类独立块石是本库作者的换形研究；原图左为横展低石体，右为竖直叠接石体，不声称该页有三态完整生成法。",
+    "observedAxes": [
+      "外廓与骨线",
+      "亮面留白",
+      "裂隙深色区域",
+      "宽削主触与窄副触",
+      "随凸面分组的长曲线与短弧"
+    ],
+    "programmaticHypothesisStatus": "structure-translation-pending-visual-review",
+    "artisticAcceptance": "unreviewed",
+    "implementation": {
+      "status": "engineering-prototype",
+      "example": "examples/structured-rock-study.html",
+      "reference": "docs/rock-form.md",
+      "artisticStatus": "unreviewed"
+    }
+  },
+  "limits": [
+    "木刻颗粒不是真实宣纸或笔毫的物理测量。",
+    "成图不能唯一确定笔序、腕法、含水或墨量。",
+    "石分三面目前依央美介绍转引，尚未核得该句清晰原页。",
+    "不重试此前失败馆站，不绕付费完整PDF，不将低清缩图补成逐字原文。",
+    "公共目录只用已核的初集卷级节点；其他集维持待核，不伪造完整页目录。"
+  ]
+}

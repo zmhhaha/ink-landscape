@@ -59,6 +59,8 @@ const tree = createTreeMacro({
 
 ## 石：骨线、淡面、皴擦与点苔
 
+显式选择 `construction: 'structured-v1'` 可使用新的块石组织，配合 `pose: 'upright' | 'reclining' | 'leaning'` 与 `technique: 'axe' | 'jiesuo'`。自供完整 `structure` 可覆盖默认造形；它与布局控制互斥。结构与执行配方见[块石文档](rock-form.md)。省略 `construction` 继续执行下述原宏，不改变已有输出。
+
 默认`position={x:0,y:0}`、`size=100`，生成一个不规则八角石面。`outline`可替换外形，`region`限定内部笔的初始裁切，省略时沿用`outline`。这些自有坐标均是绝对场景坐标；`position/size`只作用于默认外形。
 
 `ridges: [{ id, points }]`提供作者的折线与筋脉，`[]`明确取消默认折脊。先输出结构骨线，再输出少量淡笔、破碎折面与疏密点苔。`textureCount`限制0–96，默认14；`moss`默认启用，`mossCount`限制0–32，默认8。`mossAnchors`可自行指定聚点中心；默认选择外形上部节点，点簇主点较重，副点较轻。该默认规则是构图便利工具，不能替代观察某块石的受光与裂缝。

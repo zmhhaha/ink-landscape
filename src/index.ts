@@ -40,5 +40,7 @@ export { createPointTextureDocument, compilePointTextureRecipe, revisePointTextu
 export type * from './point-texture.js';
 export { createSurfaceCunDocument, compileSurfaceCunRecipe, reviseSurfaceCunDocument } from './surface-cun.js';
 export type * from './surface-cun.js';
+export { createRockForm, createRockDocument, compileRockRecipe, reviseRockDocument } from './rock-form.js';
+export type * from './rock-form-types.js';
 export { TECHNIQUE_STUDY_BATCHES, getTechniqueStudies, TECHNIQUE_REVISIONS, getTechniqueRevisions } from './technique-studies.js';
 export type * from './technique-studies.js';

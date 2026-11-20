@@ -1,6 +1,9 @@
 import { createRandom, pointInPolygon } from './core.js';
 import { jitterPath } from './perturbation.js';
 import { createStrokeGroupDocument } from './stroke-group-document.js';
+import { createRockDocument } from './rock-form.js';
+import { clearsRockReserves } from './rock-texture.js';
+import type { RockPose, RockTechnique, RockStructureSource } from './rock-form-types.js';
 import type { GroupStrokeOptions, GroupStrokeSource, StrokeGroupSource } from './stroke-group-document.js';
 import type { InkPoint, Vec2 } from './types.js';
 
@@ -55,6 +58,13 @@ export interface RockMacroOptions extends SubjectOptions {
   readonly mossAnchors?: readonly Vec2[];
   /** Evaluated while authoring. The resulting ordinary paths are serialized. */
   readonly flow?: (point: Vec2) => Vec2;
+  /** Explicit new construction; omitted retains the original macro output. */
+  readonly construction?: 'structured-v1';
+  readonly technique?: RockTechnique;
+  readonly pose?: RockPose;
+  readonly detail?: number;
+  /** Replaces automatic geometry, including all faces and direction guides. */
+  readonly structure?: RockStructureSource;
 }
 export type BirdPart = 'tail' | 'back' | 'wing' | 'head' | 'beak' | 'feet' | 'eye';
 export interface BirdMacroOptions extends SubjectOptions {
@@ -73,7 +83,8 @@ export interface BirdMacroOptions extends SubjectOptions {
 
 const commonFields = ['id', 'seed', 'ink'];
 const treeFields = [...commonFields, 'start', 'angle', 'size', 'width', 'depth', 'style', 'branches'];
-const rockFields = [...commonFields, 'position', 'size', 'outline', 'region', 'ridges', 'textureCount', 'moss', 'mossCount', 'mossAnchors', 'flow'];
+const rockFields = [...commonFields, 'position', 'size', 'outline', 'region', 'ridges', 'textureCount', 'moss', 'mossCount', 'mossAnchors', 'flow',
+  'construction', 'technique', 'pose', 'detail', 'structure'];
 const birdParts: readonly BirdPart[] = ['tail', 'back', 'wing', 'head', 'beak', 'feet', 'eye'];
 const birdFields = [...commonFields, 'position', 'size', 'angle', 'type', 'pose', 'facing', 'paper', 'attachment', 'parts'];
 function fields(value: object, allowed: readonly string[], name: string): void {
@@ -245,6 +256,29 @@ export function createTreeMacro(options: TreeMacroOptions = {}): SubjectMacro {
 /** Bone lines, sparse pale deposits, broken facets and clustered moss sources. */
 export function createRockMacro(options: RockMacroOptions = {}): SubjectMacro {
   fields(options,rockFields,'rock option');
+  if(options.construction!==undefined){
+    if(options.construction!=='structured-v1')throw new RangeError('Unknown rock construction');
+    if(['outline','region','ridges','textureCount','flow'].some(key=>key in options))throw new RangeError('Structured rock overrides use structure with faces and flow guides');
+    if(options.structure!==undefined&&['position','size','pose'].some(key=>key in options))throw new RangeError('Authored rock structure replaces automatic layout');
+    const s=settings(options,'rock');
+    const structured=createRockDocument({width:1,height:1,seed:s.seed,ink:s.ink,idPrefix:s.id,
+      technique:options.technique??'axe',...(options.detail===undefined?{}:{detail:options.detail}),
+      ...(options.structure!==undefined?{structure:options.structure}:{...(options.position===undefined?{}:{position:options.position}),
+        ...(options.size===undefined?{}:{size:options.size}),...(options.pose===undefined?{}:{pose:options.pose})}),
+    });
+    // Reuse the established moss source and attachment rules on the new shape.
+    const decoration=createRockMacro({id:s.id,seed:s.seed,ink:s.ink,outline:structured.recipe.structure.outline,
+      ridges:[],textureCount:0,...(options.moss===undefined?{}:{moss:options.moss}),
+      ...(options.mossCount===undefined?{}:{mossCount:options.mossCount}),...(options.mossAnchors===undefined?{}:{mossAnchors:options.mossAnchors})});
+    const reserves=structured.recipe.structure.faces.flatMap(face=>face.reserves??[]);
+    const hasBones=structured.groups.some(group=>group.id===`${s.id.length}:${s.id}/bones`);
+    const moss=decoration.groups.filter(group=>group.id.endsWith('/moss')).map(group=>{
+      const {parentId,...source}=group;
+      return {...source,...(hasBones?{parentId}:{}),strokes:group.strokes.filter(stroke=>clearsRockReserves(stroke.points,stroke.options?.width??3,reserves))};
+    }).filter(group=>group.strokes.length);
+    return finish('rock',[...structured.groups,...moss],hasBones?[...decoration.attachments]:[],s.seed);
+  }
+  if(['technique','pose','detail','structure'].some(key=>key in options))throw new RangeError('Rock form controls require construction: structured-v1');
   const s=settings(options,'rock'),size=positive(options.size??100,'size'),position=point(options.position??{x:0,y:0});
   const outline=polygon(options.outline??[[0,.85],[.08,.35],[.34,.02],[.67,.12],[.88,.43],[1,.87],[.71,1],[.2,.97]].map(([x,y])=>({x:position.x+x!*size,y:position.y+y!*size})));
   const region=polygon(options.region??outline),xs=outline.map(p=>p.x),ys=outline.map(p=>p.y),left=Math.min(...xs),top=Math.min(...ys),w=Math.max(...xs)-left,h=Math.max(...ys)-top;

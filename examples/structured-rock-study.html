@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>芥子园山石 · 大斧劈与解索</title>
+<link rel="stylesheet" href="./structured-rock-study.css">
+<main>
+  <header>
+    <p class="eyebrow">芥子园选读 · 独立块石 · 可编辑造形</p>
+    <h1>山石造形 · 大斧劈与解索</h1>
+    <p>立石、卧石、斜石分别比较旧山石宏、新大斧劈、新解索及结构示意。旧宏使用通用侧锋碎面，没有解索选项；两种新法均与同一旧输出比较，同时改变用笔与组织。本页记录原创程序近似，尚待艺术评价。</p>
+    <p class="note">第四列以代码显示结构；原书图版仅作出处链接，没有加载进绘制。下方另列换形与预登记种子的结果，和主样片分开导出。</p>
+  </header>
+  <div class="toolbar" aria-label="导出和核验">
+    <button id="save-png" disabled>保存三种石势对照</button>
+    <button id="save-transfer" disabled>保存换形对照</button>
+    <button id="save-source" disabled>保存全部编辑源</button>
+    <button id="check-replay" disabled>检查全部重建</button>
+    <span id="status" role="status" aria-live="polite">正在准备山石对照…</span>
+  </div>
+  <section id="gallery" aria-label="三种石势与两种皴法"></section>
+  <section id="transfer-gallery" aria-label="换形与预登记种子">
+    <h2 class="suite-heading">换形与预登记种子</h2>
+    <p class="note">以下结果保留生成时的固定输入。它们用于检验本轮适用范围，不代表任意轮廓都能自动识别分面。</p>
+  </section>
+  <details id="source-editor">
+    <summary>编辑一笔或一组山石源</summary>
+    <div class="editor-selects">
+      <div><label for="case-select">选择样片</label><select id="case-select" disabled></select></div>
+      <div><label for="technique-select">选择新法</label><select id="technique-select" disabled><option value="axe">大斧劈</option><option value="jiesuo">解索</option></select></div>
+    </div>
+    <label for="recipe-source">所选新法 · 普通笔组 JSON</label>
+    <textarea id="recipe-source" spellcheck="false" disabled></textarea>
+    <div class="toolbar">
+      <button id="apply-source" disabled>重绘所选样片</button>
+      <button id="restore-source" disabled>还原所选样片</button>
+      <span id="edit-status" role="status" aria-live="polite"></span>
+    </div>
+    <p class="note">编辑改变所选画面的逐笔配方。导出的源记录手动编辑状态；还原后可继续比较生成结果。</p>
+  </details>
+  <footer>
+    <p>固定输入、种子和绝对时间用于复现。图版结构、程序假设、工程检查与艺术评价分别记录。</p>
+    <a href="./jieziyuan-study.html">查看首轮树石叶选读</a>
+    <span aria-hidden="true"> · </span><a href="./index.html">返回笔墨试验台</a>
+  </footer>
+</main>
+<script type="module" src="./structured-rock-study.mjs"></script>
+</html>

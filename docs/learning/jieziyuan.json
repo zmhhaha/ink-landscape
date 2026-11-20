@@ -35,7 +35,13 @@
       "id": "tree-two-three",
       "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-1.jpg",
       "locator": "右页二株畫法，左页三株畫法；未核印刷页码",
-      "readableExcerpts": ["老樹須婆娑多情", "幼樹須窈窕有致", "互相顧盼", "必須左右互讓", "穿插自然"],
+      "readableExcerpts": [
+        "老樹須婆娑多情",
+        "幼樹須窈窕有致",
+        "互相顧盼",
+        "必須左右互讓",
+        "穿插自然"
+      ],
       "observation": "主副树的根位、顶高、枝势有差；粗干勾线留白，细枝转单线。",
       "hypothesis": "显式主副、交分、前后笔序；用现有Bark勾干和单线细梢。",
       "studyId": "unequal-grove"
@@ -68,7 +74,11 @@
       "id": "axe-jiesuo",
       "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-5.jpg",
       "locator": "左大斧劈法，右解索皴法",
-      "readableExcerpts": ["大斧劈法", "馬遠夏圭多爲之", "解索皴法"],
+      "readableExcerpts": [
+        "大斧劈法",
+        "馬遠夏圭多爲之",
+        "解索皴法"
+      ],
       "observation": "宽削面和曲折长线的结构分工不同，均有局部重墨及开放空面。",
       "hypothesis": "先定分面与裂隙，再用现有不同皴触随形组织；本轮石例的pima为作者选择。",
       "studyId": "rock-faces"
@@ -77,7 +87,11 @@
       "id": "three-distances",
       "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-6.jpg",
       "locator": "山论三远法；高远法、深远法图",
-      "readableExcerpts": ["自下而仰其巔曰高遠", "自前而窺其後曰深遠", "自近而望及遠曰平遠"],
+      "readableExcerpts": [
+        "自下而仰其巔曰高遠",
+        "自前而窺其後曰深遠",
+        "自近而望及遠曰平遠"
+      ],
       "observation": "脊线遮挡与云水留白建立空间。",
       "hypothesis": "构图源显式保存遮挡次序和白色通道。",
       "implementation": "pending-comparison"
@@ -86,7 +100,9 @@
       "id": "mi",
       "url": "https://yihua.art/wp-content/uploads/2022/02/jzycjwjkx-7.jpg",
       "locator": "左页米法；右页题签本轮不作归属依据",
-      "readableExcerpts": ["米法"],
+      "readableExcerpts": [
+        "米法"
+      ],
       "observation": "大小短横触高低相搭，主簇、副点和露纸共同成山。",
       "hypothesis": "在既有米点上研究点群和叠触，不能据印本设定真实水墨参数。",
       "implementation": "pending-comparison"
@@ -103,7 +119,11 @@
   "study": {
     "url": "../../examples/jieziyuan-study.html",
     "fixtures": "../../examples/jieziyuan-study-fixtures.mjs",
-    "ids": ["unequal-grove", "rock-faces", "leaf-openings"],
+    "ids": [
+      "unequal-grove",
+      "rock-faces",
+      "leaf-openings"
+    ],
     "views": 12,
     "source": "ordinary editable StrokeGroupDocument recipes; no reference pixels",
     "control": "本轮作者均匀控制组，不冒充旧版本截图；多个变量同时改变，不声称单变量因果",
@@ -113,5 +133,17 @@
     "木刻颗粒不是真实宣纸或笔毫的物理测量。",
     "成图不能唯一确定笔序、腕法、含水或墨量。",
     "阅读证据、工程实现、用户艺术评价分别记录。"
+  ],
+  "iterations": [
+    {
+      "id": "structured-rock-v1",
+      "date": "2026-11-20",
+      "sourcePlate": "axe-jiesuo",
+      "scope": "独立块石，立卧斜，大斧劈与解索；少量参数自动结构及可编辑作者覆盖",
+      "implementation": "src/rock-form.ts",
+      "example": "examples/structured-rock-study.html",
+      "readingCatalog": "jieziyuan-catalog.json",
+      "artisticStatus": "unreviewed"
+    }
   ]
 }

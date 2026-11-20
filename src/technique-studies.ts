@@ -55,7 +55,9 @@ export const TECHNIQUE_REVISIONS: readonly TechniqueRevisionStudy[] = Object.fre
   {id:'points-20261120',title:'点皴与岩脊组织回修',techniqueIds:['cun-yudian','cun-douban','cun-dingtou','cun-midian','vegetation-moss'],family:'points'},
   {id:'lines-20261120',title:'顺坡与断面皴笔回修',techniqueIds:['cun-pima','cun-jiesuo','cun-niumao','cun-axe','cun-zhedai'],family:'lines'},
   {id:'split-20261120',title:'散锋与破笔回修',techniqueIds:['brush-split','leaf-broken','cun-baoshi'],family:'split'},
-].map(({family,...item})=>Object.freeze({...item,techniqueIds:Object.freeze(item.techniqueIds),example:`examples/existing-technique-revision.html?family=${family}`})));
+  {id:'rock-form-20261120',title:'芥子园块石造形：大斧劈与解索',techniqueIds:['cun-axe','cun-jiesuo'],family:'structured-rock'},
+].map(({family,...item})=>Object.freeze({...item,techniqueIds:Object.freeze(item.techniqueIds),
+  example:family==='structured-rock'?'examples/structured-rock-study.html':`examples/existing-technique-revision.html?family=${family}`})));
 export function getTechniqueRevisions(id: string): readonly TechniqueRevisionStudy[] {
   return Object.freeze(TECHNIQUE_REVISIONS.filter(study=>study.techniqueIds.includes(id)));
 }
