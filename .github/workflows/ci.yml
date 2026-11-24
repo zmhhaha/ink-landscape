@@ -13,14 +13,14 @@ jobs:
     strategy:
       matrix:
         node: [20, 22]
-    env:
-      INK_LANDSCAPE_ARTIFACT_DIR: ${{ runner.temp }}/ink-landscape-library-checks
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      - name: Set artifact directory
+        run: echo "INK_LANDSCAPE_ARTIFACT_DIR=${{ runner.temp }}/ink-landscape-library-checks" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run check
       - run: npm test
