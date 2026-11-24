@@ -1,5 +1,7 @@
 export type * from './types.js';
 export { createInkScene, createRandom, pointInPolygon, resamplePath } from './core.js';
+export { composeInkScene } from './composition.js';
+export type * from './composition.js';
 export { sampleStrokePath } from './path.js';
 export { createNoise1D, jitterPath, varyPressure, splitBristles } from './perturbation.js';
 export type * from './perturbation.js';
@@ -28,6 +30,9 @@ export { createWaterProcessDocument, compileWaterProcessRecipe, reviseWaterProce
 export type * from './water-process.js';
 export { createCunDocument, compileCunRecipe, reviseCunDocument } from './cun-document.js';
 export type * from './cun-document.js';
+export { CUN_TECHNIQUES, AUTHORED_CUN_TECHNIQUES, REGION_CUN_TECHNIQUES,
+  isAuthoredCunTechnique, isRegionCunTechnique } from './cun-techniques.js';
+export type { RegionCunTechnique } from './cun-techniques.js';
 export { createVegetationDocument, compileVegetationRecipe, reviseVegetationDocument, transformVegetationUnit, createSplitVegetationUnit } from './vegetation-document.js';
 export type * from './vegetation-document.js';
 export { createStrokeGroupDocument, compileStrokeGroupRecipe, reviseStrokeGroupDocument } from './stroke-group-document.js';

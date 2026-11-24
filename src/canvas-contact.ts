@@ -220,6 +220,7 @@ export function drawContactStroke(ctx: CanvasRenderingContext2D, mark: StrokeMar
       ctx.beginPath(); mark.clip.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
       ctx.closePath(); ctx.clip();
     }
+    // Canvas ignores invalid CSS colors; establish ink fallback before assigning the source color.
     ctx.fillStyle = '#171b18';
     ctx.fillStyle = mark.ink;
     for (const band of plan.bands) {

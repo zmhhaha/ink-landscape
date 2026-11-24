@@ -12,8 +12,18 @@ const near = (a,b) => assert.ok(Math.abs(a-b)<1e-9, `${a} != ${b}`);
 
 test('split contact dynamics are explicit and omitted options retain the pinned previous output', () => {
   const original=splitBristles(path,7,options);
-  assert.equal(createHash('sha256').update(JSON.stringify(original)).digest('hex'),
-    'cf181becc30e3b7bf16a0f0de969bd0df172c974e8b9a15cadd1b49bd67163a1');
+  // Snapshot independently compiled d7c22f0. Math.pow with exponents .72 and
+  // .6 differs in its last bits across V8 versions; only coordinates/pressure are rounded
+  // to 1e-9. IDs, array structure, widths and opacity remain exact in the hash.
+  const snapshot=original.map(strand=>({...strand,points:strand.points.map(point=>({...point,
+    x:Math.round(point.x*1e9)/1e9,y:Math.round(point.y*1e9)/1e9,
+    ...(point.pressure===undefined?{}:{pressure:Math.round(point.pressure*1e9)/1e9}),
+  }))}));
+  assert.equal(createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),
+    'da8efd95aa59425c1f47fad5a4158c74493e095543c34ba15db818d0f34a692f');
+  assert.deepEqual(splitBristles(path,7,options),original);
+  assert.deepEqual(splitBristles(JSON.parse(JSON.stringify(path)),7,JSON.parse(JSON.stringify(options))),original);
+  assert.deepEqual(JSON.parse(JSON.stringify(original)),original);
   assert.deepEqual(splitBristles(path,7,{...options,dynamics:undefined}),original);
   assert.notDeepEqual(splitBristles(path,7,dynamics),original);
 });

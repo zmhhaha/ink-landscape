@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>笔墨库浏览器回归检查</title>
+<main>
+  <h1>笔墨库浏览器回归检查</h1>
+  <p>固定输入的像素关系检查；不代表艺术评价或跨浏览器像素一致。</p>
+  <button id="run">重新检查</button>
+  <p id="status" role="status">正在检查…</p>
+  <canvas id="preview" width="400" height="240" aria-label="复合笔触检查画面"></canvas>
+  <pre id="results" aria-live="polite"></pre>
+</main>
+<script type="module" src="./library-verify.mjs"></script>
+</html>

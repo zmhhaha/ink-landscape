@@ -9,8 +9,9 @@
 ```ts
 import {
   createBrushDocument, reviseBrushDocument, compileBrushRecipe,
-  createInkScene, renderCanvas,
-} from 'ink-landscape';
+} from 'ink-landscape/brush';
+import { createInkScene, composeInkScene } from 'ink-landscape/core';
+import { renderCanvas } from 'ink-landscape/canvas';
 
 const document = createBrushDocument([
   { x: 50, y: 140, pressure: .25 },
@@ -43,7 +44,23 @@ renderCanvas(context, scene.snapshot(), { time: 2 });
 
 创建、编译和修改可以在Node中执行，均拥有独立数据并深冻结；`renderCanvas`需要调用者提供Canvas 2D上下文。`reviseBrushDocument`对`options`作浅合并，传入新的`controls`数组会整体替换原数组。只改一个属性时，可用`document.recipe.options.controls.map(...)`构造保留其余控制的新数组。
 
-同一场景的笔迹ID必须唯一。`createBrushDocument`省略`id`时使用确定的默认ID，多笔创作应逐笔提供不同ID，或插入builder时让其分配新ID。
+同一场景的笔迹ID必须唯一。`createBrushDocument`省略`id`时使用确定的局部默认ID，独立文档可能各有一个`stroke-1`。直接使用`builder.stroke(mark.points, mark)`会保留该ID，不能把多个文档的局部ID当作全局身份。
+
+## 组合独立文档
+
+`composeInkScene()`以调用者给出的唯一命名空间区分文档实例，保留已经生成的笔种子、原坐标与绝对时间：
+
+```ts
+const path = [{ x: 20, y: 100 }, { x: 180, y: 40 }];
+const first = createBrushDocument(path);
+const second = createBrushDocument(path.map(point => ({ ...point, y: point.y + 50 })));
+const combined = composeInkScene([
+  { namespace: 'upper', source: first },
+  { namespace: 'lower', source: second },
+], { width: 240, height: 180, seed: 7 });
+```
+
+两个文档可继续使用各自的默认ID；同一内容也可用两个不同命名空间重复叠画。命名空间表示实例身份，须在本次组合中唯一。组合不会改写原文档，不会因给输出ID加前缀而重新派生笔种子。也可在创建时用`options.id`显式命名，再直接插入builder；显式重复ID仍会报错。
 
 ## 文档和接口
 

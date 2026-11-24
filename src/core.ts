@@ -3,6 +3,7 @@ import type {
   StrokeMark, StrokeOptions, Vec2, WashMark, WashOptions,
 } from './types.js';
 import { copyStrokeBrush } from './brush-state.js';
+import { isRegionCunTechnique } from './cun-techniques.js';
 
 const TAU = Math.PI * 2;
 const EPSILON = 1e-9;
@@ -245,7 +246,7 @@ export function createInkScene(options: SceneOptions): SceneBuilder {
     cun(outline, cunOptions: CunOptions = {}) {
       const region = copyPolygon(outline);
       const technique = cunOptions.technique ?? 'pima';
-      if (technique !== 'pima' && technique !== 'axe') throw new RangeError('technique must be pima or axe');
+      if (!isRegionCunTechnique(technique)) throw new RangeError('technique must be pima or axe');
       const count = integer(cunOptions.count ?? 56, 'count');
       bounded(count, 'count', 0, MAX_GENERATED_MARKS);
       const length = positive(cunOptions.length ?? Math.min(width, height) * 0.16, 'length');

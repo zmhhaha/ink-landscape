@@ -21,6 +21,8 @@ interface PathSample extends Vec2 {
   readonly ny: number;
 }
 
+const strokeSamples = new WeakMap<StrokeMark, readonly PathSample[]>();
+
 interface BrushSample extends PathSample {
   readonly halfWidth: number;
   readonly contact: readonly number[];
@@ -130,11 +132,19 @@ function progressAt(start: number, duration: number, time: number): number {
 }
 
 /** Sample the complete stroke first, so seeking never changes the texture seed. */
-function sampleStroke(mark: StrokeMark): PathSample[] {
-  return sampleStrokePath(mark.points, {
+function sampleStroke(mark: StrokeMark): readonly PathSample[] {
+  const stored = strokeSamples.get(mark);
+  if (stored) return stored;
+  const samples = sampleStrokePath(mark.points, {
     spacing: clamp(mark.width * 0.12, 0.65, 4),
     smoothing: mark.smoothing ?? 'linear',
   });
+  // Frozen marks can still contain mutable arrays or points. Imported JSON
+  // keeps its live-edit behavior unless the complete sampling input is frozen.
+  if (Object.isFrozen(mark) && Object.isFrozen(mark.points) && mark.points.every(Object.isFrozen)) {
+    strokeSamples.set(mark, samples);
+  }
+  return samples;
 }
 
 function partialSamples(samples: readonly PathSample[], progress: number): readonly PathSample[] {
@@ -250,6 +260,7 @@ function drawStroke(ctx: CanvasRenderingContext2D, mark: StrokeMark, progress: n
       polygon(ctx, mark.clip);
       ctx.clip();
     }
+    // Canvas ignores invalid CSS colors; reset first so they cannot inherit a previous fill.
     ctx.fillStyle = '#171b18';
     ctx.fillStyle = mark.ink;
     if (samples.length === 1) {
@@ -262,6 +273,8 @@ function drawStroke(ctx: CanvasRenderingContext2D, mark: StrokeMark, progress: n
       // A small stylized soft edge. This is not a fluid or paper-fibre simulation.
       if (mark.dryness < 0.3 && mark.width > 3) {
         ctx.globalAlpha = base * 0.09;
+        // Invalid CSS must not inherit a previous or transparent shadow color.
+        ctx.shadowColor = '#171b18';
         ctx.shadowColor = mark.ink;
         ctx.shadowBlur = Math.min(3, mark.width * 0.12) * (1 - mark.dryness);
         ribbon(ctx, samples, 1.035);
@@ -366,11 +379,14 @@ function roughOutline(mark: WashMark, pass: number): Vec2[] {
 function drawWash(ctx: CanvasRenderingContext2D, mark: WashMark, progress: number): void {
   ctx.save();
   try {
+    // Keep the fallback: an invalid CSS color assignment is ignored by Canvas.
     ctx.fillStyle = '#171b18';
     ctx.fillStyle = mark.ink;
     const passOpacity = 1 - Math.pow(1 - mark.opacity * progress, 1 / mark.passes);
     for (let pass = 0; pass < mark.passes; pass++) {
       ctx.globalAlpha = passOpacity;
+      // Match the fill fallback when an imported CSS color is invalid.
+      ctx.shadowColor = '#171b18';
       ctx.shadowColor = mark.ink;
       ctx.shadowBlur = mark.roughness * 2;
       polygon(ctx, roughOutline(mark, pass));
@@ -423,6 +439,7 @@ export function renderCanvas(
     if (options.clear !== false) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.setTransform(ctx.canvas.width / scene.width, 0, 0, ctx.canvas.height / scene.height, 0, 0);
     if (options.clear !== false) {
+      // Invalid imported CSS colors must fall back to paper, not the caller's fill.
       ctx.fillStyle = '#f2efe6';
       ctx.fillStyle = scene.background;
       ctx.fillRect(0, 0, scene.width, scene.height);

@@ -1,0 +1,11 @@
+export { createBrushStroke } from '../brushwork.js';
+export type * from '../brushwork.js';
+export { createBrushDocument, compileBrushRecipe, reviseBrushDocument } from '../brush-document.js';
+export type * from '../brush-document.js';
+export { sampleBrushContact } from '../brush-contact.js';
+export type { BrushContactSample } from '../brush-contact.js';
+export { createDotMarks } from '../dots.js';
+export type * from '../dots.js';
+export { createDotDocument, compileDotRecipe, reviseDotDocument } from '../dot-document.js';
+export type * from '../dot-document.js';
+export type { InkPoint, InkScene, StrokeMark, BrushControl } from '../types.js';

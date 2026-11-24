@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCunDocument, compileCunRecipe, reviseCunDocument } from '../dist/cun-document.js';
 import { sampleBrushContact } from '../dist/brush-contact.js';
+import { createInkScene } from '../dist/core.js';
+import { CUN_TECHNIQUES, AUTHORED_CUN_TECHNIQUES, REGION_CUN_TECHNIQUES,
+  isAuthoredCunTechnique, isRegionCunTechnique } from '../dist/cun-techniques.js';
 
 const settings = { technique: 'pima', width: 320, height: 240, seed: 261124 };
 const techniques = ['pima', 'axe', 'zhedai', 'jiesuo', 'luanchai', 'niumao', 'cloud-study', 'point-study', 'heye'];
@@ -15,6 +18,34 @@ const visitFrozen = value => {
   assert.ok(Object.isFrozen(value));
   for (const child of Object.values(value)) visitFrozen(child);
 };
+
+test('canonical cun IDs preserve the distinct region and authored-path capabilities', () => {
+  assert.deepEqual(CUN_TECHNIQUES, techniques);
+  assert.deepEqual(REGION_CUN_TECHNIQUES, ['pima', 'axe']);
+  assert.deepEqual(AUTHORED_CUN_TECHNIQUES, techniques);
+  assert.ok(Object.isFrozen(CUN_TECHNIQUES) && Object.isFrozen(REGION_CUN_TECHNIQUES));
+  const outline = [{ x: 10, y: 10 }, { x: 250, y: 10 }, { x: 250, y: 220 }, { x: 10, y: 220 }];
+  for (const technique of techniques) {
+    assert.equal(isAuthoredCunTechnique(technique), true);
+    const document = createCunDocument([source()], { ...settings, technique });
+    assert.equal(document.recipe.options.technique, technique);
+    assert.equal(document.result.marks.length, 1);
+    const builder = createInkScene(settings);
+    if (REGION_CUN_TECHNIQUES.includes(technique)) {
+      assert.equal(isRegionCunTechnique(technique), true);
+      assert.equal(builder.cun(outline, { technique, count: 1 }).length, 1);
+    } else {
+      assert.equal(isRegionCunTechnique(technique), false);
+      assert.throws(() => builder.cun(outline, { technique, count: 1 }), /pima or axe/);
+      assert.equal(builder.snapshot().marks.length, 0);
+    }
+  }
+  for (const value of ['pima ', 'PIMA', 'rope', '', null, 0]) {
+    assert.equal(isAuthoredCunTechnique(value), false);
+    assert.equal(isRegionCunTechnique(value), false);
+    assert.throws(() => createCunDocument([], { ...settings, technique: value }), /technique/);
+  }
+});
 
 test('cun group owns sparse paths, clips and controls independently of DOM and caller mutation', () => {
   assert.equal(typeof globalThis.document, 'undefined');

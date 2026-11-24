@@ -6,8 +6,9 @@
 
 ```ts
 import {
-  createCunDocument, reviseCunDocument, compileCunRecipe, renderCanvas,
-} from 'ink-landscape';
+  createCunDocument, reviseCunDocument, compileCunRecipe,
+} from 'ink-landscape/cun';
+import { renderCanvas } from 'ink-landscape/canvas';
 
 const document = createCunDocument([
   {
@@ -101,6 +102,32 @@ renderCanvas(context, scene, { time: 2, paperTexture: .04 });
 
 ## 与旧皴擦原型的关系
 
-`builder.cun(outline, options)`仍是原有区域生成接口，保留其`pima / axe`、方向场和参数语义。本批另用作者显式骨线建立可编辑文档，没有把旧均匀布笔结果换名为已经成立的传统皴法，也不自动迁移旧场景。
+皴法使用同一份稳定ID词表，同时分别声明两个接口实际支持的能力集合：
+
+| 接口 | 识别的ID | 调用者提供 | 生成器负责 |
+| --- | --- | --- | --- |
+| `builder.cun(outline, options)` | `REGION_CUN_TECHNIQUES`：`pima / axe` | 区域、数量、方向或方向场 | 在区域内生成有界数量的笔路。 |
+| `createCunDocument(strokes, options)` | `AUTHORED_CUN_TECHNIQUES`：本页九项 | 每一笔的原始路径、ID及局部覆盖 | 执行接触与局部动作，保存可编辑文档。 |
+
+`CUN_TECHNIQUES`是完整的稳定ID表，`CunTechnique`由它推导；`RegionCunTechnique`只包含区域生成已实现的两项。`isRegionCunTechnique()`与`isAuthoredCunTechnique()`可用于验证外部输入。词表位于[共享定义](../src/cun-techniques.ts)，原有字符串、配方版本与默认值保持。
+
+`pima`在两个接口中都合法，下面两段分别展示其不同输入：
+
+```ts
+import { createInkScene } from 'ink-landscape/core';
+import { createCunDocument } from 'ink-landscape/cun';
+
+const region = [{ x: 10, y: 10 }, { x: 220, y: 10 }, { x: 220, y: 180 }, { x: 10, y: 180 }];
+const builder = createInkScene({ width: 240, height: 200, seed: 7 });
+builder.cun(region, { technique: 'pima', count: 12, length: 45 });
+
+const authored = createCunDocument([
+  { id: 'slope', points: [{ x: 60, y: 25, pressure: .3 }, { x: 90, y: 140, pressure: .8 }] },
+], { technique: 'pima', width: 240, height: 200, seed: 7 });
+```
+
+区域生成尚不支持`jiesuo`等其他ID；共享词表不会替它增加未实现的能力。文档接口需要的是笔数组和包含`technique / width / height`的选项对象，不能把技法字符串直接当作整个选项。
+
+`cloud-study`与`point-study`保留为中性研究标识，资料范围见上文；没有为了命名风格把它们改写成尚未确证的传统名称。已有JSON继续按原生成器重建，不因词表集中管理自动迁移。
 
 本库执行笔路、提按、接触和材质，作者负责山石结构、疏密、交搭、留白及组合。传统名称只描述当前研究的程序近似，艺术适用范围待最后统一评价。

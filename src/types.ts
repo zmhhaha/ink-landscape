@@ -1,3 +1,5 @@
+import type { RegionCunTechnique } from './cun-techniques.js';
+
 export interface Vec2 { readonly x: number; readonly y: number }
 export interface InkPoint extends Vec2 { readonly pressure?: number }
 
@@ -73,7 +75,7 @@ export interface WashOptions extends TimingOptions {
 
 export interface CunOptions extends Omit<StrokeOptions, 'id' | 'clip'> {
   readonly idPrefix?: string;
-  readonly technique?: 'pima' | 'axe';
+  readonly technique?: RegionCunTechnique;
   readonly count?: number;
   readonly length?: number;
   readonly direction?: Vec2;

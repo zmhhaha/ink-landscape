@@ -2,9 +2,10 @@ import { createInkScene } from './core.js';
 import { createBrushDocument } from './brush-document.js';
 import type { BrushProgramOptions } from './brush-document.js';
 import type { BrushControl, InkPoint, InkScene } from './types.js';
+import { isAuthoredCunTechnique } from './cun-techniques.js';
+import type { CunTechnique } from './cun-techniques.js';
 
-export type CunTechnique = 'pima' | 'axe' | 'zhedai' | 'jiesuo' | 'luanchai' | 'niumao'
-  | 'cloud-study' | 'point-study' | 'heye';
+export type { CunTechnique } from './cun-techniques.js';
 export type CunStrokeOptions = Omit<BrushProgramOptions, 'id' | 'ink' | 'seed' | 'gestureModel'>;
 
 /** One author-organized stroke, not an automatically scattered texture sample. */
@@ -102,7 +103,7 @@ function hashText(value: string): number {
 }
 function validateProgram(options: CunProgramOptions): void {
   fields(options, programFields, 'cun option');
-  if (!['pima', 'axe', 'zhedai', 'jiesuo', 'luanchai', 'niumao', 'cloud-study', 'point-study', 'heye'].includes(options.technique)) {
+  if (!isAuthoredCunTechnique(options.technique)) {
     throw new RangeError('Unsupported cun technique');
   }
   positive(options.width, 'width'); positive(options.height, 'height');

@@ -9,19 +9,77 @@
     "url": "git+https://github.com/zmhhaha/ink-landscape.git"
   },
   "license": "MIT",
+  "keywords": [
+    "ink",
+    "landscape",
+    "generative-art",
+    "canvas",
+    "typescript"
+  ],
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/entrypoints/core.d.ts",
+      "import": "./dist/entrypoints/core.js"
+    },
+    "./canvas": {
+      "types": "./dist/entrypoints/canvas.d.ts",
+      "import": "./dist/entrypoints/canvas.js"
+    },
+    "./brush": {
+      "types": "./dist/entrypoints/brush.d.ts",
+      "import": "./dist/entrypoints/brush.js"
+    },
+    "./cun": {
+      "types": "./dist/entrypoints/cun.d.ts",
+      "import": "./dist/entrypoints/cun.js"
+    },
+    "./ink": {
+      "types": "./dist/entrypoints/ink.d.ts",
+      "import": "./dist/entrypoints/ink.js"
+    },
+    "./ink-canvas": {
+      "types": "./dist/entrypoints/ink-canvas.d.ts",
+      "import": "./dist/entrypoints/ink-canvas.js"
+    },
+    "./subjects": {
+      "types": "./dist/entrypoints/subjects.d.ts",
+      "import": "./dist/entrypoints/subjects.js"
+    },
+    "./learning": {
+      "types": "./dist/entrypoints/learning.d.ts",
+      "import": "./dist/entrypoints/learning.js"
+    },
+    "./package.json": "./package.json"
   },
-  "files": ["dist", "src", "docs/techniques.md", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "src",
+    "docs/techniques.md",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test",
     "dev": "npm run build && node scripts/serve.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build",
+    "test:package": "node scripts/check-package.mjs",
+    "test:browser": "npm run build && node scripts/browser-check.mjs",
     "learning:build": "npm run build && node scripts/compile-learning.mjs && npm run build"
   },
-  "engines": { "node": ">=20" },
-  "devDependencies": { "typescript": "~5.9.3" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1",
+    "typescript": "~5.9.3"
+  }
 }

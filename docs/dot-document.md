@@ -9,8 +9,9 @@
 ```ts
 import {
   createDotDocument, reviseDotDocument, compileDotRecipe,
-  createInkScene, renderCanvas,
-} from 'ink-landscape';
+} from 'ink-landscape/brush';
+import { createInkScene, composeInkScene } from 'ink-landscape/core';
+import { renderCanvas } from 'ink-landscape/canvas';
 
 const document = createDotDocument([
   { id: 'lead', x: 70, y: 80, pressure: .8, shape: 'oblique' },
@@ -84,7 +85,20 @@ renderCanvas(context, scene.snapshot(), { time: 1 });
 
 显式ID参与推导该点的材质种子。同一公共种子和稳定ID下，移动一点或重排已有ID，不会只因索引变化而换掉该点的材质种子。实际像素仍会随位置、点势、控制和笔迹叠加顺序改变；ID稳定不等于像素不变。
 
-匿名落点按索引分配ID，插入或重排可能改变后续点的身份和种子。需要后续Agent逐点编辑时，建议创建时就给每一点显式、唯一的ID。将多个点迹文档合入同一场景时，调用者也应避免文档间ID重复。
+匿名落点按索引分配ID，插入或重排可能改变后续点的身份和种子。需要后续Agent逐点编辑时，建议创建时就给每一点显式、唯一的ID。公共`idPrefix`可为源文档选择不同前缀；独立文档省略它时都从局部`dot-1`开始。
+
+多个点迹文档可通过命名空间组合，保留每一点原有种子与绝对时间：
+
+```ts
+const left = createDotDocument([{ x: 35, y: 70 }, { x: 55, y: 85 }]);
+const right = createDotDocument([{ x: 155, y: 60 }, { x: 180, y: 90 }]);
+const combined = composeInkScene([
+  { namespace: 'left-cluster', source: left },
+  { namespace: 'right-cluster', source: right },
+], { width: 240, height: 160, seed: 7 });
+```
+
+每个命名空间在一次组合中须唯一；同内容的两个实例也用不同命名空间区分。`composeInkScene()`不会修改原始点迹ID或重新计算已保存的材料种子。直接逐笔插入builder时仍需让输出ID全局唯一；重复显式ID会被拒绝。
 
 时间使用绝对秒数，逐点`start`会替代该点由索引算出的起点。`interval`只安排各点先后，不自动形成视觉上的“起、带、应”；重排没有显式`start`的落点会改变时间。渲染器的`time`控制路径显露，不表示真实书写速度或纸内扩散。
 
